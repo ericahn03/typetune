@@ -41,3 +41,4 @@ Thumbs.db
 .netlify/
 
 typetune-backend/.cache-typetune/
+typetune-frontend/public/*.mp4
