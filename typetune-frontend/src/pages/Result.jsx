@@ -133,7 +133,7 @@ export default function Result() {
       if (resultId) {
         try {
           const { data } = await axios.get(
-            `http://127.0.0.1:8000/result/${resultId}`
+            `https://typetune-backend.onrender.com/result/${resultId}`
           );
           setMbti(data);
           console.log("Fetched shared result. mbti.user =", data.user);
@@ -159,7 +159,7 @@ export default function Result() {
 
         // Otherwise, we need to save and get a resultId
         try {
-          const { data: saveResp } = await axios.post("http://127.0.0.1:8000/save-result", {
+          const { data: saveResp } = await axios.post("https://typetune-backend.onrender.com/save-result", {
             mbti: cachedMbti.mbti,
             summary: cachedMbti.summary,
             breakdown: cachedMbti.breakdown,
@@ -190,7 +190,7 @@ export default function Result() {
       }
 
       try {
-        const { data: topData } = await axios.get("http://127.0.0.1:8000/top-tracks", {
+        const { data: topData } = await axios.get("https://typetune-backend.onrender.com/top-tracks", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -207,7 +207,7 @@ export default function Result() {
           };
         });
 
-        const { data: mbtiResult } = await axios.post("http://127.0.0.1:8000/mbti", {
+        const { data: mbtiResult } = await axios.post("https://typetune-backend.onrender.com/mbti", {
           audio_features: features,
         });
 

@@ -25,7 +25,7 @@ export default function Callback() {
 
     const exchangeCodeForToken = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/callback?code=${code}`);
+        const res = await axios.get(`https://typetune-backend.onrender.com/callback?code=${code}`);
         const { access_token } = res.data;
 
         console.log("Received access token:", access_token); // ✅ Debug
