@@ -218,7 +218,7 @@ export default function Result() {
           return { ...track, duration_formatted: `${minutes}:${seconds}` };
         });
 
-        const { data: saveResp } = await axios.post("http://127.0.0.1:8000/save-result", {
+        const { data: saveResp } = await axios.post("https://typetune-backend.onrender.com/save-result", {
           mbti: mbtiResult.mbti,
           summary: mbtiResult.summary,
           breakdown: mbtiResult.breakdown,
