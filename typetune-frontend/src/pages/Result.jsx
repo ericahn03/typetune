@@ -159,7 +159,7 @@ export default function Result() {
 
         // Otherwise, we need to save and get a resultId
         try {
-          const { data: saveResp } = await axios.post("https://typetune-backend.onrender.com/save-result", {
+          const { data: saveResp } = await axios.post(`${import.meta.env.VITE_API_URL}/save-result`, {
             mbti: cachedMbti.mbti,
             summary: cachedMbti.summary,
             breakdown: cachedMbti.breakdown,
@@ -190,7 +190,7 @@ export default function Result() {
       }
 
       try {
-        const { data: topData } = await axios.get("https://typetune-backend.onrender.com/top-tracks", {
+        const { data: topData } = await axios.get(`${import.meta.env.VITE_API_URL}/top-tracks`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -207,7 +207,7 @@ export default function Result() {
           };
         });
 
-        const { data: mbtiResult } = await axios.post("https://typetune-backend.onrender.com/mbti", {
+        const { data: mbtiResult } = await axios.post(`${import.meta.env.VITE_API_URL}/mbti`, {
           audio_features: features,
         });
 
@@ -218,7 +218,7 @@ export default function Result() {
           return { ...track, duration_formatted: `${minutes}:${seconds}` };
         });
 
-        const { data: saveResp } = await axios.post("https://typetune-backend.onrender.com/save-result", {
+        const { data: saveResp } = await axios.post(`${import.meta.env.VITE_API_URL}/save-result`, {
           mbti: mbtiResult.mbti,
           summary: mbtiResult.summary,
           breakdown: mbtiResult.breakdown,

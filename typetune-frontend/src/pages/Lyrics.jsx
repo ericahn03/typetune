@@ -32,7 +32,7 @@ export default function Lyrics() {
         }
       }
 
-      const res = await axios.get(`https://typetune-backend.onrender.com/lyrics/${trackId}`, {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/lyrics/${trackId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -84,7 +84,7 @@ export default function Lyrics() {
         }
       }
 
-      const res = await axios.get(`https://typetune-backend.onrender.com/artist-insight/${trackId}`, {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/artist-insight/${trackId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
