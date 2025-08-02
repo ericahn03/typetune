@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes slideWave {
+    0% {
+      background-position: -200px center;
+      opacity: 0;
+    }
+    40% {
+      opacity: 1;
+    }
+    100% {
+      background-position: 0 center;
+    }
+  }
+  
+  @keyframes drift {
+    0% {
+      background-position: left top;
+    }
+    50% {
+      background-position: left center;
+    }
+    100% {
+      background-position: left top;
+    }
+  }
+  
+  .animate-slideWave {
+    animation: slideWave 2.5s ease-out forwards;
+  }
+  
+  .animate-drift {
+    animation: drift 15s ease-in-out infinite;
+  }
+
+  @keyframes fadeInTop {
+    0% {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .fade-in-top {
+    animation: fadeInTop 1s ease-out forwards;
+  }
+  
+  @keyframes pulseGlow {
+    0%, 100% {
+      box-shadow: 0 0 10px #1DB954, 0 0 20px #1DB954;
+    }
+    50% {
+      box-shadow: 0 0 20px #1DB954, 0 0 30px #1DB954;
+    }
+  }
+  
+  .glow-line {
+    height: 3px;
+    width: 100%;
+    background-color: #1DB954;
+    animation: pulseGlow 2s infinite;
+    border-radius: 9999px;
+  }
+
+  @keyframes glow {
+    0%, 100% {
+      box-shadow: 0 0 10px #1DB954, 0 0 20px #1DB954;
+    }
+    50% {
+      box-shadow: 0 0 20px #1DB954, 0 0 35px #1DB954;
+    }
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite;
+  }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+@keyframes fade-in {
+  0% { opacity: 0; transform: translateY(12px);}
+  100% { opacity: 1; transform: translateY(0);}
+}
+.animate-fade-in {
+  animation: fade-in 0.3s cubic-bezier(.33,1,.68,1.17);
+}

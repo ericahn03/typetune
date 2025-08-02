@@ -1,0 +1,43 @@
+# --- Node.js ---
+node_modules/
+dist/
+.cache/
+.vite/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Ignore compiled Python files (including in typetune-backend and root)
+typetune-backend/__pycache__/
+typetune-backend/*.pyc
+typetune-backend/**/*.pyc
+
+# --- Environment Variables ---
+.env
+typetune-frontend/.env
+typetune-backend/.env
+env/  # virtual environment folder (if you're using it)
+
+# --- Vite Output ---
+typetune-frontend/dist/
+
+# --- Mac/Windows System Files ---
+.DS_Store
+Thumbs.db
+
+# --- Log Files ---
+*.log
+
+# --- IDE-specific Files ---
+.vscode/
+.idea/
+
+# --- Vercel or Netlify local config ---
+.vercel/
+.netlify/
+
+typetune-backend/.cache-typetune/
