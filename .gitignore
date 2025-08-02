@@ -42,3 +42,5 @@ Thumbs.db
 
 typetune-backend/.cache-typetune/
 typetune-frontend/public/*.mp4
+
+env/
