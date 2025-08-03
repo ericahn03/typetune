@@ -48,6 +48,7 @@ sp_oauth = SpotifyOAuth(
     client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
     redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI"),
     scope="user-top-read user-read-private",
+    cache_path=None,
 )
 
 @app.get("/login")
@@ -56,10 +57,19 @@ def login():
 
 @app.get("/callback")
 def callback(code: str):
-    token_info = sp_oauth.get_access_token(code)
-    if not token_info:
+    token_url = "https://accounts.spotify.com/api/token"
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": os.getenv("SPOTIPY_REDIRECT_URI"),
+        "client_id": os.getenv("SPOTIPY_CLIENT_ID"),
+        "client_secret": os.getenv("SPOTIPY_CLIENT_SECRET"),
+    }
+    response = requests.post(token_url, data=data)
+    if response.status_code != 200:
         raise HTTPException(status_code=400, detail="Could not fetch token")
-    return {"access_token": token_info["access_token"]}
+    tokens = response.json()
+    return {"access_token": tokens["access_token"]}
 
 @app.get("/top-tracks")
 def get_top_tracks(authorization: str = Header(...)):
