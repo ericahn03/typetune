@@ -210,13 +210,13 @@ def get_lyrics_from_genius(artist: str, title: str):
 @app.get("/lyrics/{track_id}")
 async def get_lyrics(track_id: str, request: Request):
     print(f"Incoming request for track ID: {track_id}")
-    
+
     token = request.headers.get("Authorization")
     if not token:
         print("❌ Missing Authorization header")
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
-    
+
     try:
         print("Fetching track metadata from Spotify...")
         res = requests.get(
@@ -224,18 +224,20 @@ async def get_lyrics(track_id: str, request: Request):
             headers={"Authorization": f"Bearer {token}"}
         )
         print(f"Spotify response status: {res.status_code}")
-        
+        print("Spotify response:", res.json())  # Add this
+
         if res.status_code != 200:
             print("❌ Spotify track fetch failed")
             raise HTTPException(status_code=res.status_code, detail="Spotify track fetch failed")
-        
+
         track = res.json()
         artist = track["artists"][0]["name"]
         title = track["name"]
         print(f"Track title: {title}, Artist: {artist}")
 
-        print("Fetching lyrics from Genius...")
+        print("Fetching lyrics from Genius for:", artist, "/", title)
         lyrics = get_lyrics_from_genius(artist, title)
+        print("Lyrics found?" , "YES" if lyrics else "NO")
         if not lyrics:
             print(f"[Genius] Searching lyrics for {artist} - {title}")
             print("❌ No lyrics found")
@@ -251,109 +253,106 @@ async def get_lyrics(track_id: str, request: Request):
         print(f"💥 Internal server error: {e}")
         return JSONResponse(status_code=500, content={"message": f"Server error: {str(e)}"})
 
-async def summarize_artist_info(artist_name: str, input_text: str) -> str:
-    prompt = (
-        f"Using the following info, write a short ~100-word biography of the musical artist '{artist_name}'. "
-        f"Focus on genre, background, notable achievements, and overall style. Make it sound casual, music-savvy, "
-        f"and human — like something from a fan blog or artist spotlight.\n\n"
-        f"INFO:\n{input_text}"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",
-        "X-Title": "TypeTune"
-    }
-
-    payload = {
-        "model": "openrouter/horizon-alpha",
-        "messages": [
-            {"role": "system", "content": "You are a helpful music expert."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 300
-    }
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
-
 @app.get("/artist-insight/{track_id}")
 async def get_artist_insight(track_id: str, request: Request):
     token = request.headers.get("Authorization")
     if not token:
+        print("❌ No Spotify token header provided")
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
 
     try:
-        # Fetch Spotify track and artist info
-        print(f"Fetching track metadata for ID: {track_id}")
+        print(f"🔵 Fetching Spotify track metadata for ID: {track_id}")
         track_resp = requests.get(
             f"https://api.spotify.com/v1/tracks/{track_id}",
             headers={"Authorization": f"Bearer {token}"}
         )
+        print(f"🔵 Spotify track fetch status: {track_resp.status_code}")
+        if track_resp.status_code == 401:
+            print("🔴 Invalid/expired token")
+            raise HTTPException(status_code=401, detail="Invalid Spotify access token")
+        if track_resp.status_code == 404:
+            print("🔴 Track not found on Spotify")
+            return JSONResponse(status_code=404, content={"message": "Track not found on Spotify"})
         if track_resp.status_code != 200:
+            print(f"🔴 Unexpected status code: {track_resp.status_code}")
             raise HTTPException(status_code=track_resp.status_code, detail="Spotify track fetch failed")
+        
         track = track_resp.json()
+        # Defensive artist check
+        if not track.get("artists") or not isinstance(track["artists"], list) or not track["artists"]:
+            print("🔴 No artists found for track")
+            return JSONResponse(status_code=404, content={"message": "No artist found for this track"})
         artist_id = track["artists"][0]["id"]
         artist_name = track["artists"][0]["name"]
-        print(f"Artist Name: {artist_name}")
+        print(f"🔵 Found artist: {artist_name} (ID: {artist_id})")
 
         # Spotify artist data
-        sp = Spotify(auth=token)
-        artist_data = sp.artist(artist_id)
-        spotify_info = {
-            "name": artist_data.get("name"),
-            "genres": artist_data.get("genres", []),
-            "popularity": artist_data.get("popularity"),
-            "image": artist_data.get("images", [{}])[0].get("url"),
-            "spotify_url": artist_data.get("external_urls", {}).get("spotify")
-        }
+        try:
+            sp = Spotify(auth=token)
+            artist_data = sp.artist(artist_id)
+            print("🔵 Spotify artist data:", artist_data)
+            spotify_info = {
+                "name": artist_data.get("name"),
+                "genres": artist_data.get("genres", []),
+                "popularity": artist_data.get("popularity"),
+                "image": artist_data.get("images", [{}])[0].get("url"),
+                "spotify_url": artist_data.get("external_urls", {}).get("spotify")
+            }
+        except Exception as e:
+            print(f"🔴 Spotify artist API error: {e}")
+            spotify_info = {
+                "name": artist_name,
+                "genres": [],
+                "popularity": None,
+                "image": None,
+                "spotify_url": None
+            }
 
         sources_used = []
         combined_info = ""
 
-        # Add Spotify info to prompt if available
+        # Spotify genres, if available
         if spotify_info["genres"]:
             sources_used.append("spotify")
             combined_info += f"Genres: {', '.join(spotify_info['genres'])}.\n"
 
-        # Try Genius bio
+        # Genius bio
+        genius_bio = None
         try:
-            print("Searching Genius bio...")
+            print(f"🟠 Searching Genius for: {artist_name}")
             genius_artist = genius.search_artist(artist_name, max_songs=1, sort="popularity")
-            genius_bio = genius_artist.description.strip() if genius_artist and genius_artist.description else None
-            if genius_bio:
-                sources_used.append("genius")
-                combined_info += f"Genius Bio: {genius_bio}\n"
+            if genius_artist and getattr(genius_artist, "description", None):
+                genius_bio = genius_artist.description.strip()
+                if genius_bio:
+                    sources_used.append("genius")
+                    combined_info += f"Genius Bio: {genius_bio}\n"
+            else:
+                print("🟠 Genius search returned no bio.")
         except Exception as e:
-            print(f"❌ Genius error: {e}")
-            genius_bio = None
+            print(f"🔴 Genius API error: {e}")
 
-        # Fallback if no info available
         if not combined_info.strip():
+            print("🟠 No data found from Spotify or Genius; using fallback prompt.")
             combined_info = f"Write a 100-word bio for {artist_name}, a musical artist."
 
         # DeepSeek summary generation
-        print(f"Info to summarize:\n{combined_info[:300]}")
-        print("Generating artist summary with DeepSeek...")
-        summary = await summarize_artist_info(artist_name, combined_info)
-        sources_used.append("deepseek")
-        print(f"Summary generated: {summary[:100]}...")
+        print(f"🟢 Info sent to DeepSeek: {combined_info[:300]}")
+        summary = None
+        try:
+            summary = await summarize_artist_info(artist_name, combined_info)
+            sources_used.append("deepseek")
+            print(f"🟢 DeepSeek summary (first 100): {summary[:100]}...")
+        except Exception as e:
+            print(f"🔴 DeepSeek error: {e}")
+            summary = None
 
         return {
-            "artist_name": spotify_info["name"],
-            "image": spotify_info["image"],
-            "genres": spotify_info["genres"],
-            "popularity": spotify_info["popularity"],
-            "spotify_url": spotify_info["spotify_url"],
+            "artist_name": spotify_info.get("name", artist_name),
+            "image": spotify_info.get("image"),
+            "genres": spotify_info.get("genres"),
+            "popularity": spotify_info.get("popularity"),
+            "spotify_url": spotify_info.get("spotify_url"),
             "summary": summary,
             "sources_used": sources_used
         }
@@ -361,6 +360,7 @@ async def get_artist_insight(track_id: str, request: Request):
     except Exception as e:
         print(f"💥 Artist insight error: {e}")
         return JSONResponse(status_code=500, content={"message": f"Artist insight error: {str(e)}"})
+
 
 # ======== PERSISTENT RESULT STORAGE W/ MONGODB ========
 
