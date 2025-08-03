@@ -1,29 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { LogIn, Music2, BrainCircuit, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
-import useActiveSection from "../hooks/useActiveSection"; 
-
+import useActiveSection from "../hooks/useActiveSection";
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI;
-const SCOPE = "user-top-read";
-
+const SCOPE = "user-top-read user-read-private";
 const AUTH_URL = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(
   REDIRECT_URI
 )}&scope=${encodeURIComponent(SCOPE)}&show_dialog=true`;
 
+const LOCAL_KEY = "typetune_mbti_cache";
+const SPOTIFY_KEY = "spotify_access_token";
+
 export default function Login() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [heroVisible, setHeroVisible] = useState(false);
-  const [scrolled, setScrolled] = useState(false); 
+  const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef(null);
   const sectionIds = ["about", "how", "contact"];
   const activeSection = useActiveSection(sectionIds);
 
+  // Always clear any cached MBTI result and token on landing here
   useEffect(() => {
-    // Clear token and cache whenever user lands on Login
-    localStorage.removeItem("spotify_access_token");
-    localStorage.removeItem("typetune_mbti_cache");
+    localStorage.removeItem(LOCAL_KEY);
+    localStorage.removeItem(SPOTIFY_KEY);
   }, []);
 
   useEffect(() => {
@@ -43,13 +44,11 @@ export default function Login() {
         setMenuOpen(false);
       }
     }
-
     if (menuOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     } else {
       document.removeEventListener("mousedown", handleClickOutside);
     }
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -75,7 +74,7 @@ export default function Login() {
       {/* Dark Overlay */}
       <div className="fixed inset-0 bg-black/70 z-10 pointer-events-none" />
 
-      {/* Sticky Header with scroll-triggered shadow */}
+      {/* Sticky Header */}
       <header
         className={`sticky top-0 left-0 w-full z-30 px-6 py-5 flex items-center justify-between 
         bg-black/30 backdrop-blur-sm transition-shadow duration-300 ${
@@ -83,7 +82,6 @@ export default function Login() {
         }`}
       >
         <img src="/logo_typetune.png" alt="TypeTune Logo" className="h-10 w-auto object-contain" />
-
         {/* Desktop Navigation */}
         <nav className="hidden sm:flex gap-6 text-gray-300 font-medium">
           {sectionIds.map((id) => (
@@ -98,7 +96,6 @@ export default function Login() {
             </a>
           ))}
         </nav>
-
         {/* Mobile Hamburger */}
         <div className="sm:hidden">
           <button
@@ -121,7 +118,6 @@ export default function Login() {
             </svg>
           </button>
         </div>
-
         {/* Mobile Nav Panel */}
         {menuOpen && (
           <div
@@ -206,7 +202,6 @@ export default function Login() {
             an MBTI-powered insight engine that listens back. It analyzes your top Spotify tracks, favorite genres, and listening patterns
             to reveal who you are through what you vibe with.
           </p>
-
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm sm:text-base text-left">
             {[
               "Extraversion vs. Introversion (E/I)",
@@ -222,7 +217,6 @@ export default function Login() {
               </div>
             ))}
           </div>
-
           <p>
             Your MBTI result comes with a full breakdown — track popularity, genre leanings, artist stats — all translated into meaningful personality insights. You also get lyrics, emotional themes, and artist summaries for your top 24 tracks. It's music meets psychology, beautifully decoded.
           </p>

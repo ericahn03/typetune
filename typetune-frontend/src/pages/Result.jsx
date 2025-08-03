@@ -10,34 +10,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 
 const LOCAL_KEY = "typetune_mbti_cache";
+const SPOTIFY_KEY = "spotify_access_token";
 
 // --- Animated Glassy Share Button ---
 function FloatingActionButton({ mbti, isShared }) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
 
-  if (isShared) {
-    return (
-      <div className="fixed bottom-6 left-0 w-full flex justify-center z-50 pointer-events-none md:bottom-10">
-        <button
-          onClick={() => navigate("/")}
-          className={
-            "flex items-center gap-2 bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400 text-white font-bold px-8 py-3 rounded-full shadow-full hover:scale-105 active:scale-95 transition-all duration-200 ease-out text-lg pointer-events-auto border-none backdrop-blur-xl outline-none ring-2 ring-blue-400/30 hover:ring-blue-400/90 drop-shadow-[0_0_25px_#60a5fa60]"
-          }
-          style={{
-            boxShadow: "0 4px 24px 0 rgba(59,130,246,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)",
-          }}
-        >
-          <Home className="w-6 h-6 text-white animate-pulse" />
-          <span>Try Your Audio Type</span>
-        </button>
-      </div>
-    );
-  }
-
   const handleShare = async () => {
-    const resultIdMatch = window.location.pathname.match(/\/result\/(.+)/);
-    const resultId = resultIdMatch ? resultIdMatch[1] : null;
+    const resultId = mbti?.result_id;
     const shareUrl = resultId
       ? `${window.location.origin}/result/${resultId}`
       : window.location.origin;
@@ -52,10 +33,41 @@ function FloatingActionButton({ mbti, isShared }) {
     }
   };
 
+  if (isShared) {
+    return (
+      <div className="fixed bottom-6 left-0 w-full flex justify-center z-50 pointer-events-none md:bottom-10">
+        <button
+          onClick={() => navigate("/")}
+          className={`
+            flex items-center gap-2
+            bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400
+            text-white font-bold px-8 py-3 rounded-full shadow-full
+            hover:scale-105 active:scale-95
+            transition-all duration-200 ease-out text-lg pointer-events-auto
+            border-none
+            backdrop-blur-xl
+            outline-none
+            ring-2 ring-blue-400/30 hover:ring-blue-400/90
+            drop-shadow-[0_0_25px_#60a5fa60]
+          `}
+          style={{
+            boxShadow: "0 4px 24px 0 rgba(59,130,246,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)",
+          }}
+        >
+          <Home className="w-6 h-6 text-white animate-pulse" />
+          <span>Try Your Audio Type</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
       {copied && (
-        <div className="fixed left-1/2 bottom-32 -translate-x-1/2 bg-green-600/90 text-white px-6 py-3 rounded-xl shadow-lg z-50 pointer-events-none select-none w-max text-center">
+        <div className="
+          fixed left-1/2 bottom-32 -translate-x-1/2
+          bg-green-600/90 text-white px-6 py-3
+          rounded-xl shadow-lg z-50 pointer-events-none select-none w-max text-center">
           Link copied to clipboard!
         </div>
       )}
@@ -70,16 +82,17 @@ function FloatingActionButton({ mbti, isShared }) {
         <motion.button
           onClick={handleShare}
           whileTap={{ scale: 0.97, y: 2 }}
-          whileHover={{ scale: 1.05, boxShadow: isShared ? "0 0 40px #60a5fa70" : "0 0 40px #1db95470" }}
-          className={`flex items-center gap-2 ${
-            isShared
-              ? "bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400 ring-blue-400/30 hover:ring-blue-400/90 drop-shadow-[0_0_25px_#60a5fa60]"
-              : "bg-gradient-to-r from-green-500 via-green-400 to-green-600/80 ring-green-400/30 hover:ring-green-400/90 drop-shadow-[0_0_25px_#1db95460]"
-          } text-white font-bold px-8 py-3 rounded-full shadow-full hover:scale-105 active:scale-95 transition-all duration-200 ease-out text-lg pointer-events-auto border-none backdrop-blur-xl outline-none`}
+          whileHover={{ scale: 1.05, boxShadow: "0 0 40px #1db95470" }}
+          className={`
+            flex items-center gap-2
+            bg-gradient-to-r from-green-500 via-green-400 to-green-600/80 ring-green-400/30 hover:ring-green-400/90 drop-shadow-[0_0_25px_#1db95460]
+            text-white font-bold px-8 py-3 rounded-full shadow-full
+            hover:scale-105 active:scale-95
+            transition-all duration-200 ease-out text-lg pointer-events-auto
+            border-none backdrop-blur-xl outline-none
+          `}
           style={{
-            boxShadow: isShared
-              ? "0 4px 24px 0 rgba(59,130,246,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)"
-              : "0 4px 24px 0 rgba(30,185,84,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)",
+            boxShadow: "0 4px 24px 0 rgba(30,185,84,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)",
           }}
         >
           {copied ? (
@@ -103,8 +116,9 @@ function FloatingActionButton({ mbti, isShared }) {
 export default function Result() {
   const [mbti, setMbti] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [displayName, setDisplayName] = useState(""); // Store for sharing
-  const token = localStorage.getItem("spotify_access_token");
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [userDisplayName, setUserDisplayName] = useState("");
+  const token = localStorage.getItem(SPOTIFY_KEY);
   const navigate = useNavigate();
   const { resultId } = useParams();
   const isShared = !!resultId;
@@ -113,117 +127,137 @@ export default function Result() {
     async function loadResult() {
       setLoading(true);
 
-      // --- If viewing a shared result, just fetch from backend and return ---
+      // Get current Spotify userId (if logged in)
+      let fetchedSpotifyId = null;
+      let fetchedDisplayName = "";
+      if (token) {
+        try {
+          const { data: userData } = await axios.get("https://api.spotify.com/v1/me", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchedSpotifyId = userData.id;
+          fetchedDisplayName = userData.display_name || "";
+          setCurrentUserId(fetchedSpotifyId);
+          setUserDisplayName(fetchedDisplayName);
+        } catch (e) {
+          setCurrentUserId(null);
+        }
+      }
+
+      // 1. Shared result view (URL contains resultId)
       if (resultId) {
         try {
-          const { data } = await axios.get(
-            `https://typetune-backend.onrender.com/result/${resultId}`
+          const { data: sharedResult } = await axios.get(
+            `${import.meta.env.VITE_API_URL}/result/${resultId}`
           );
-          setMbti(data);
+          setMbti(sharedResult);
+
+          // If logged in, and this shared result is actually my own result, redirect to /result (personal)
+          if (
+            token &&
+            sharedResult.spotify_id &&
+            sharedResult.spotify_id === fetchedSpotifyId
+          ) {
+            navigate("/result", { replace: true });
+            return;
+          }
         } catch (err) {
           setMbti(null);
         } finally {
           setLoading(false);
         }
-        return; // STOP further execution
-      }
-
-      // --- Not shared view: must have Spotify token to proceed ---
-      if (!token) {
-        setMbti(null);
-        setLoading(false);
         return;
       }
 
-      // --- Fetch current Spotify user info ---
-      let userDisplayName = "";
-      let userId = "";
-      try {
-        const { data: userData } = await axios.get("https://api.spotify.com/v1/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        userDisplayName = userData.display_name || "";
-        userId = userData.id;
-        setDisplayName(userDisplayName);
-      } catch (e) {
-        setDisplayName("");
-        setMbti(null);
-        setLoading(false);
-        return;
-      }
-
-      // --- Validate cache: must exist, must have spotify_id matching current user ---
+      // 2. Personal result (no resultId in URL)
+      // Check local cache
       const cached = localStorage.getItem(LOCAL_KEY);
       if (cached) {
         const cachedMbti = JSON.parse(cached);
-        // Only trust if cache is for this user, and cache has a spotify_id!
-        if (cachedMbti.spotify_id && cachedMbti.spotify_id === userId) {
+        // Only use cached result if it matches current Spotify user
+        if (
+          fetchedSpotifyId &&
+          cachedMbti.spotify_id &&
+          cachedMbti.spotify_id === fetchedSpotifyId
+        ) {
           setMbti(cachedMbti);
           setLoading(false);
           return;
         } else {
-          // Either no spotify_id (old cache) or different user: clear it!
+          // Remove outdated cache
           localStorage.removeItem(LOCAL_KEY);
         }
       }
 
-      // --- Run new analysis for this user ---
-      try {
-        const { data: topData } = await axios.get(`${import.meta.env.VITE_API_URL}/top-tracks`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const features = topData.tracks.map(track => {
-          const totalSeconds = Math.floor(track.duration_ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = String(totalSeconds % 60).padStart(2, '0');
-          return {
+      // Need to recalculate
+      if (token) {
+        try {
+          // Fetch top tracks
+          const { data: topData } = await axios.get(
+            `${import.meta.env.VITE_API_URL}/top-tracks`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          // Prepare features for backend MBTI
+          const features = topData.tracks.map(track => ({
             popularity: track.popularity,
             duration_ms: track.duration_ms,
-            duration_formatted: `${minutes}:${seconds}`,
             artist_popularity: track.artist_popularity,
             artist_genres: track.artist_genres,
+          }));
+
+          // MBTI calculation
+          const { data: mbtiResult } = await axios.post(
+            `${import.meta.env.VITE_API_URL}/mbti`,
+            { audio_features: features }
+          );
+
+          // Add formatted duration for UI
+          const formattedTracks = topData.tracks.map(track => {
+            const totalSeconds = Math.floor(track.duration_ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            return { ...track, duration_formatted: `${minutes}:${seconds}` };
+          });
+
+          // Save to backend and get resultId
+          const { data: saveResp } = await axios.post(
+            `${import.meta.env.VITE_API_URL}/save-result`,
+            {
+              mbti: mbtiResult.mbti,
+              summary: mbtiResult.summary,
+              breakdown: mbtiResult.breakdown,
+              tracks_used: formattedTracks,
+              user: fetchedDisplayName,
+              spotify_id: fetchedSpotifyId,
+            }
+          );
+
+          // Update URL
+          window.history.replaceState({}, '', `/result/${saveResp.result_id}`);
+
+          const result = {
+            ...mbtiResult,
+            tracks_used: formattedTracks,
+            user: fetchedDisplayName,
+            spotify_id: fetchedSpotifyId,
+            result_id: saveResp.result_id,
           };
-        });
-
-        const { data: mbtiResult } = await axios.post(`${import.meta.env.VITE_API_URL}/mbti`, {
-          audio_features: features,
-        });
-
-        const formattedTracks = topData.tracks.map(track => {
-          const totalSeconds = Math.floor(track.duration_ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = String(totalSeconds % 60).padStart(2, '0');
-          return { ...track, duration_formatted: `${minutes}:${seconds}` };
-        });
-
-        // --- Save result, include Spotify ID! ---
-        const { data: saveResp } = await axios.post(`${import.meta.env.VITE_API_URL}/save-result`, {
-          mbti: mbtiResult.mbti,
-          summary: mbtiResult.summary,
-          breakdown: mbtiResult.breakdown,
-          tracks_used: formattedTracks,
-          user: userDisplayName,
-          spotify_id: userId, // Critical for cache validation!
-        });
-
-        // <<< FIX IS HERE >>>
-        // Instead of replacing history (which React Router doesn't react to),
-        // this will trigger a rerender with the new param and load the shared result path!
-        navigate(`/result/${saveResp.result_id}`, { replace: true });
-
-        // NO NEED to set result here; effect will rerun and load result via above logic.
-
-      } catch (err) {
-        setMbti(null);
-      } finally {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(result));
+          setMbti(result);
+        } catch (err) {
+          setMbti(null);
+        } finally {
+          setLoading(false);
+        }
+      } else {
         setLoading(false);
+        setMbti(null);
       }
     }
 
     loadResult();
-  }, [token, resultId, navigate]); // make sure to include navigate in deps
-
+    // eslint-disable-next-line
+  }, [token, resultId]);
 
   if (loading)
     return <div className="text-center text-white mt-16 text-xl">Analyzing your music...</div>;
@@ -301,7 +335,7 @@ export default function Result() {
           {Object.entries(mbti.breakdown).map(([key, value]) => {
             if (key === "mbti_logic") return null;
             return (
-              <div key={key} className={`backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-5 text-center hover:scale-105 transform transition duration-300 shadow-lg`}>
+              <div key={key} className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-5 text-center hover:scale-105 transform transition duration-300 shadow-lg">
                 <h3 className={`uppercase text-xs font-bold ${isShared ? "text-sky-400" : "text-green-400"} tracking-wide`}>
                   {key.replace(/_/g, " ")}
                 </h3>
