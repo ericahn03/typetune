@@ -14,9 +14,8 @@ import os
 import requests
 import lyricsgenius
 import httpx
-
-# NEW: MongoDB
-from pymongo import MongoClient
+import certifi                     # <--- ADD THIS
+from pymongo import MongoClient    # <--- Atlas needs certifi for TLS
 
 load_dotenv()
 app = FastAPI()
@@ -25,18 +24,18 @@ app = FastAPI()
 GENIUS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# MongoDB setup
+# MongoDB setup (Atlas + certifi)
 MONGO_URI = os.getenv("MONGODB_URI")
-mongo_client = MongoClient(MONGO_URI)
+mongo_client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
 db = mongo_client["typetune"]
 
-# CORS
+# CORS (allows Vercel + localhost)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://typetune.vercel.app",    # Your deployed frontend
-        "http://localhost:5173",          # For local dev (optional)
-        "http://localhost:3000",          # For local dev (optional)
+        "https://typetune.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -80,7 +79,6 @@ def get_top_tracks(authorization: str = Header(...)):
             print("[DEBUG] No top tracks returned from Spotify.")
             return {"tracks": []}
 
-        # Defensive: Only process items if present and correct
         artist_ids = []
         for i, track in enumerate(top_tracks["items"]):
             if "artists" in track and track["artists"]:
@@ -381,3 +379,4 @@ def get_result(result_id: str):
     # MongoDB adds an "_id" field, which can't be serialized to JSON; remove it
     result.pop("_id", None)
     return result
+
