@@ -25,7 +25,7 @@ export default function Callback() {
 
     const exchangeCodeForToken = async () => {
       try {
-        const res = await axios.get(`https://typetune-backend.onrender.com/callback?code=${code}`);
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/callback?code=${code}`);
         const { access_token } = res.data;
 
         console.log("Received access token:", access_token); // ✅ Debug

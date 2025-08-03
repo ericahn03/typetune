@@ -8,6 +8,10 @@ export default function Lyrics() {
   const navigate = useNavigate();
   const token = localStorage.getItem("spotify_access_token");
 
+  console.log("Fetching:", `${import.meta.env.VITE_API_URL}/lyrics/${trackId}`);
+  console.log("Token exists?", Boolean(token));
+  console.log("trackId:", trackId);
+
   const [lyricsData, setLyricsData] = useState(null);
   const [artistInsight, setArtistInsight] = useState(null);
   const [artistLoading, setArtistLoading] = useState(true);
@@ -251,7 +255,3 @@ export default function Lyrics() {
     </div>
   );
 }
-
-console.log("Fetching:", `${import.meta.env.VITE_API_URL}/lyrics/${trackId}`);
-console.log("Token exists?", Boolean(token));
-console.log("trackId:", trackId);

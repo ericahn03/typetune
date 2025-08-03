@@ -21,18 +21,9 @@ function FloatingActionButton({ mbti, isShared }) {
       <div className="fixed bottom-6 left-0 w-full flex justify-center z-50 pointer-events-none md:bottom-10">
         <button
           onClick={() => navigate("/")}
-          className={`
-            flex items-center gap-2
-            bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400
-            text-white font-bold px-8 py-3 rounded-full shadow-full
-            hover:scale-105 active:scale-95
-            transition-all duration-200 ease-out text-lg pointer-events-auto
-            border-none
-            backdrop-blur-xl
-            outline-none
-            ring-2 ring-blue-400/30 hover:ring-blue-400/90
-            drop-shadow-[0_0_25px_#60a5fa60]
-          `}
+          className={
+            "flex items-center gap-2 bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400 text-white font-bold px-8 py-3 rounded-full shadow-full hover:scale-105 active:scale-95 transition-all duration-200 ease-out text-lg pointer-events-auto border-none backdrop-blur-xl outline-none ring-2 ring-blue-400/30 hover:ring-blue-400/90 drop-shadow-[0_0_25px_#60a5fa60]"
+          }
           style={{
             boxShadow: "0 4px 24px 0 rgba(59,130,246,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)",
           }}
@@ -64,10 +55,7 @@ function FloatingActionButton({ mbti, isShared }) {
   return (
     <>
       {copied && (
-        <div className="
-          fixed left-1/2 bottom-32 -translate-x-1/2
-          bg-green-600/90 text-white px-6 py-3
-          rounded-xl shadow-lg z-50 pointer-events-none select-none w-max text-center">
+        <div className="fixed left-1/2 bottom-32 -translate-x-1/2 bg-green-600/90 text-white px-6 py-3 rounded-xl shadow-lg z-50 pointer-events-none select-none w-max text-center">
           Link copied to clipboard!
         </div>
       )}
@@ -83,16 +71,11 @@ function FloatingActionButton({ mbti, isShared }) {
           onClick={handleShare}
           whileTap={{ scale: 0.97, y: 2 }}
           whileHover={{ scale: 1.05, boxShadow: isShared ? "0 0 40px #60a5fa70" : "0 0 40px #1db95470" }}
-          className={`
-            flex items-center gap-2
-            ${isShared
+          className={`flex items-center gap-2 ${
+            isShared
               ? "bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400 ring-blue-400/30 hover:ring-blue-400/90 drop-shadow-[0_0_25px_#60a5fa60]"
-              : "bg-gradient-to-r from-green-500 via-green-400 to-green-600/80 ring-green-400/30 hover:ring-green-400/90 drop-shadow-[0_0_25px_#1db95460]"}
-            text-white font-bold px-8 py-3 rounded-full shadow-full
-            hover:scale-105 active:scale-95
-            transition-all duration-200 ease-out text-lg pointer-events-auto
-            border-none backdrop-blur-xl outline-none
-          `}
+              : "bg-gradient-to-r from-green-500 via-green-400 to-green-600/80 ring-green-400/30 hover:ring-green-400/90 drop-shadow-[0_0_25px_#1db95460]"
+          } text-white font-bold px-8 py-3 rounded-full shadow-full hover:scale-105 active:scale-95 transition-all duration-200 ease-out text-lg pointer-events-auto border-none backdrop-blur-xl outline-none`}
           style={{
             boxShadow: isShared
               ? "0 4px 24px 0 rgba(59,130,246,0.20), 0 1.5px 4px 0 rgba(0,0,0,0.15)"
@@ -130,65 +113,61 @@ export default function Result() {
     async function loadResult() {
       setLoading(true);
 
+      // --- If viewing a shared result, just fetch from backend and return ---
       if (resultId) {
         try {
           const { data } = await axios.get(
             `https://typetune-backend.onrender.com/result/${resultId}`
           );
           setMbti(data);
-          console.log("Fetched shared result. mbti.user =", data.user);
         } catch (err) {
           setMbti(null);
-          console.error("Error fetching shared MBTI:", err);
         } finally {
           setLoading(false);
         }
+        return; // STOP further execution
+      }
+
+      // --- Not shared view: must have Spotify token to proceed ---
+      if (!token) {
+        setMbti(null);
+        setLoading(false);
         return;
       }
 
-      const cached = localStorage.getItem(LOCAL_KEY);
-      if (cached) {
-        const cachedMbti = JSON.parse(cached);
-
-        // If already at /result/:id, just use cache
-        if (resultId) {
-          setMbti(cachedMbti);
-          setLoading(false);
-          return;
-        }
-
-        // Otherwise, we need to save and get a resultId
-        try {
-          const { data: saveResp } = await axios.post(`${import.meta.env.VITE_API_URL}/save-result`, {
-            mbti: cachedMbti.mbti,
-            summary: cachedMbti.summary,
-            breakdown: cachedMbti.breakdown,
-            tracks_used: cachedMbti.tracks_used,
-            user: cachedMbti.user || displayName,
-          });
-          window.history.replaceState({}, '', `/result/${saveResp.result_id}`);
-          setMbti({ ...cachedMbti, result_id: saveResp.result_id });
-        } catch (err) {
-          console.error("Error saving cached MBTI:", err);
-          setMbti(cachedMbti);
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-
+      // --- Fetch current Spotify user info ---
       let userDisplayName = "";
+      let userId = "";
       try {
         const { data: userData } = await axios.get("https://api.spotify.com/v1/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
         userDisplayName = userData.display_name || "";
+        userId = userData.id;
         setDisplayName(userDisplayName);
       } catch (e) {
-        console.error("Failed to fetch Spotify display name", e);
         setDisplayName("");
+        setMbti(null);
+        setLoading(false);
+        return;
       }
 
+      // --- Validate cache: must exist, must have spotify_id matching current user ---
+      const cached = localStorage.getItem(LOCAL_KEY);
+      if (cached) {
+        const cachedMbti = JSON.parse(cached);
+        // Only trust if cache is for this user, and cache has a spotify_id!
+        if (cachedMbti.spotify_id && cachedMbti.spotify_id === userId) {
+          setMbti(cachedMbti);
+          setLoading(false);
+          return;
+        } else {
+          // Either no spotify_id (old cache) or different user: clear it!
+          localStorage.removeItem(LOCAL_KEY);
+        }
+      }
+
+      // --- Run new analysis for this user ---
       try {
         const { data: topData } = await axios.get(`${import.meta.env.VITE_API_URL}/top-tracks`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -218,21 +197,27 @@ export default function Result() {
           return { ...track, duration_formatted: `${minutes}:${seconds}` };
         });
 
+        // --- Save result, include Spotify ID! ---
         const { data: saveResp } = await axios.post(`${import.meta.env.VITE_API_URL}/save-result`, {
           mbti: mbtiResult.mbti,
           summary: mbtiResult.summary,
           breakdown: mbtiResult.breakdown,
           tracks_used: formattedTracks,
           user: userDisplayName,
+          spotify_id: userId, // Critical for cache validation!
         });
 
         window.history.replaceState({}, '', `/result/${saveResp.result_id}`);
 
-        const result = { ...mbtiResult, tracks_used: formattedTracks, user: userDisplayName };
+        const result = {
+          ...mbtiResult,
+          tracks_used: formattedTracks,
+          user: userDisplayName,
+          spotify_id: userId,
+        };
         localStorage.setItem(LOCAL_KEY, JSON.stringify(result));
         setMbti(result);
       } catch (err) {
-        console.error("Error fetching MBTI:", err);
         setMbti(null);
       } finally {
         setLoading(false);
@@ -318,7 +303,7 @@ export default function Result() {
           {Object.entries(mbti.breakdown).map(([key, value]) => {
             if (key === "mbti_logic") return null;
             return (
-              <div key={key} className="backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-5 text-center hover:scale-105 transform transition duration-300 shadow-lg">
+              <div key={key} className={`backdrop-blur-lg bg-white/5 border border-white/10 rounded-lg p-5 text-center hover:scale-105 transform transition duration-300 shadow-lg`}>
                 <h3 className={`uppercase text-xs font-bold ${isShared ? "text-sky-400" : "text-green-400"} tracking-wide`}>
                   {key.replace(/_/g, " ")}
                 </h3>

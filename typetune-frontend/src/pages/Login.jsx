@@ -21,6 +21,12 @@ export default function Login() {
   const activeSection = useActiveSection(sectionIds);
 
   useEffect(() => {
+    // Clear token and cache whenever user lands on Login
+    localStorage.removeItem("spotify_access_token");
+    localStorage.removeItem("typetune_mbti_cache");
+  }, []);
+
+  useEffect(() => {
     const timeout = setTimeout(() => setHeroVisible(true), 300);
     return () => clearTimeout(timeout);
   }, []);
