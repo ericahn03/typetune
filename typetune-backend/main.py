@@ -126,7 +126,7 @@ async def generate_summary_with_deepseek(artist: str, title: str):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",
+        "HTTP-Referer": "https://typetune.vercel.app",
         "X-Title": "TypeTune"
     }
 
@@ -195,6 +195,7 @@ async def get_lyrics(track_id: str, request: Request):
         print("Fetching lyrics from Genius...")
         lyrics = get_lyrics_from_genius(artist, title)
         if not lyrics:
+            print(f"[Genius] Searching lyrics for {artist} - {title}")
             print("❌ No lyrics found")
             return JSONResponse(status_code=404, content={"message": "Lyrics not found"})
 
