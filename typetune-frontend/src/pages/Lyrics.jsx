@@ -251,3 +251,7 @@ export default function Lyrics() {
     </div>
   );
 }
+
+console.log("Fetching:", `${import.meta.env.VITE_API_URL}/lyrics/${trackId}`);
+console.log("Token exists?", Boolean(token));
+console.log("trackId:", trackId);
