@@ -48,7 +48,6 @@ sp_oauth = SpotifyOAuth(
     client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
     redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI"),
     scope="user-top-read user-read-private",
-    cache_path=".cache-typetune",
 )
 
 @app.get("/login")
