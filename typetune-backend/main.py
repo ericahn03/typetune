@@ -194,17 +194,27 @@ async def generate_summary_with_deepseek(artist: str, title: str):
 
 def get_lyrics_from_genius(artist: str, title: str):
     try:
-        song = genius.search_song(title=title.strip(), artist=artist.strip())
-        if song and song.lyrics:
-            return song.lyrics.strip()
+        # Use Genius API search_songs endpoint (works with dev API)
+        search_results = genius.search_songs(title)
+        print(f"🔵 Genius API returned {len(search_results['hits'])} hits for {title}")
 
-        fallback_query = f"{title} {artist}"
-        song = genius.search_song(fallback_query)
-        if song and song.lyrics:
-            return song.lyrics.strip()
-
+        for hit in search_results['hits']:
+            result = hit['result']
+            # Try to match by artist name, case-insensitive
+            if artist.lower() in result['primary_artist']['name'].lower():
+                song_id = result['id']
+                print(f"🟢 Matched song: {result['full_title']} (ID: {song_id})")
+                # Now fetch lyrics by song ID (developer API supports this)
+                song = genius.song(song_id)
+                # Sometimes lyrics are under 'lyrics', sometimes 'lyrics_body'
+                lyrics = song['song'].get('lyrics') or song['song'].get('lyrics_body')
+                if lyrics:
+                    print(f"🟢 Lyrics fetched for song ID {song_id}")
+                    return lyrics.strip()
+        print("🟠 No matching song found in Genius API search.")
         return None
-    except Exception:
+    except Exception as e:
+        print(f"🔴 Genius API error: {e}")
         return None
 
 @app.get("/lyrics/{track_id}")
