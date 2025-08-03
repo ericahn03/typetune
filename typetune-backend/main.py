@@ -10,6 +10,7 @@ from mbti_engine import infer_mbti
 from uuid import uuid4
 from threading import Lock
 from typing import Optional
+from bs4 import BeautifulSoup
 
 import os
 import requests
@@ -152,17 +153,39 @@ async def generate_summary_with_deepseek(artist: str, title: str):
 # Genius lyrics fetcher
 def get_lyrics_from_genius(artist: str, title: str):
     try:
-        song = genius.search_song(title=title.strip(), artist=artist.strip())
-        if song and song.lyrics:
-            return song.lyrics.strip()
+        # Build the search URL
+        search_query = f"{title} {artist}".replace(" ", "%20")
+        search_url = f"https://genius.com/api/search/multi?per_page=5&q={search_query}"
 
-        fallback_query = f"{title} {artist}"
-        song = genius.search_song(fallback_query)
-        if song and song.lyrics:
-            return song.lyrics.strip()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36"
+        }
+
+        response = requests.get(search_url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        # Try to get the first song hit
+        hits = data["response"]["sections"][0]["hits"]
+        if not hits:
+            return None
+        song_url = hits[0]["result"]["url"]
+
+        # Now scrape the lyrics page
+        song_page = requests.get(song_url, headers=headers)
+        soup = BeautifulSoup(song_page.text, "html.parser")
+        lyrics_div = soup.find("div", class_="lyrics")  # Legacy
+        if lyrics_div:
+            return lyrics_div.get_text(strip=True)
+
+        # Newer Genius pages use this class
+        lyrics_containers = soup.select("div[data-lyrics-container=true]")
+        if lyrics_containers:
+            return "\n".join([div.get_text(strip=True) for div in lyrics_containers])
 
         return None
-    except Exception:
+    except Exception as e:
+        print(f"❌ Genius scraping failed: {e}")
         return None
 
 @app.get("/lyrics/{track_id}")
