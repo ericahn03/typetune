@@ -207,16 +207,13 @@ export default function Result() {
           spotify_id: userId, // Critical for cache validation!
         });
 
-        window.history.replaceState({}, '', `/result/${saveResp.result_id}`);
+        // <<< FIX IS HERE >>>
+        // Instead of replacing history (which React Router doesn't react to),
+        // this will trigger a rerender with the new param and load the shared result path!
+        navigate(`/result/${saveResp.result_id}`, { replace: true });
 
-        const result = {
-          ...mbtiResult,
-          tracks_used: formattedTracks,
-          user: userDisplayName,
-          spotify_id: userId,
-        };
-        localStorage.setItem(LOCAL_KEY, JSON.stringify(result));
-        setMbti(result);
+        // NO NEED to set result here; effect will rerun and load result via above logic.
+
       } catch (err) {
         setMbti(null);
       } finally {
@@ -225,7 +222,8 @@ export default function Result() {
     }
 
     loadResult();
-  }, [token, resultId]);
+  }, [token, resultId, navigate]); // make sure to include navigate in deps
+
 
   if (loading)
     return <div className="text-center text-white mt-16 text-xl">Analyzing your music...</div>;
