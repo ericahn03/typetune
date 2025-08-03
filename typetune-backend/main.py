@@ -33,7 +33,11 @@ db = mongo_client["typetune"]
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://typetune.vercel.app",    # Your deployed frontend
+        "http://localhost:5173",          # For local dev (optional)
+        "http://localhost:3000",          # For local dev (optional)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,13 +65,36 @@ def callback(code: str):
 
 @app.get("/top-tracks")
 def get_top_tracks(authorization: str = Header(...)):
+    print("Received request for /top-tracks")
     token = authorization.replace("Bearer ", "")
+    print("Extracted Spotify token (first 10 chars):", token[:10])
     sp = Spotify(auth=token)
 
     try:
         top_tracks = sp.current_user_top_tracks(limit=24, time_range="medium_term")
-        artist_ids = [track["artists"][0]["id"] for track in top_tracks["items"]]
+        print("Fetched top_tracks object from Spotify:")
+        print("Keys:", list(top_tracks.keys()))
+        print("Number of items in 'items':", len(top_tracks.get("items", [])))
+
+        if not top_tracks.get("items"):
+            print("[DEBUG] No top tracks returned from Spotify.")
+            return {"tracks": []}
+
+        # Defensive: Only process items if present and correct
+        artist_ids = []
+        for i, track in enumerate(top_tracks["items"]):
+            if "artists" in track and track["artists"]:
+                artist_ids.append(track["artists"][0]["id"])
+            else:
+                print(f"[DEBUG] Track {i} missing artists:", track)
+        print("Artist IDs extracted:", artist_ids)
+
+        if not artist_ids:
+            print("[DEBUG] No artist IDs found in top tracks.")
+            return {"tracks": []}
+
         artist_infos = sp.artists(artist_ids)["artists"]
+        print("Fetched artist infos, count:", len(artist_infos))
 
         artist_lookup = {
             artist["id"]: {
@@ -78,10 +105,9 @@ def get_top_tracks(authorization: str = Header(...)):
         }
 
         track_data = []
-        for track in top_tracks["items"]:
-            artist_id = track["artists"][0]["id"]
+        for i, track in enumerate(top_tracks["items"]):
+            artist_id = track["artists"][0]["id"] if track["artists"] else None
             artist_info = artist_lookup.get(artist_id, {})
-
             track_data.append({
                 "track_name": track["name"],
                 "track_id": track["id"],
@@ -96,10 +122,13 @@ def get_top_tracks(authorization: str = Header(...)):
                 "artist_genres": artist_info.get("genres", []),
                 "artist_popularity": artist_info.get("popularity", 0),
             })
+            print(f"[DEBUG] Track {i}: {track['name']} by {track['artists'][0]['name']}")
 
+        print(f"[DEBUG] Returning {len(track_data)} tracks to client.")
         return {"tracks": track_data}
 
     except Exception as e:
+        print(f"[ERROR] Exception in /top-tracks: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching top tracks: {str(e)}")
 
 class AudioFeaturesPayload(BaseModel):
