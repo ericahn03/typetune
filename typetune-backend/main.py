@@ -4,18 +4,19 @@ from fastapi.responses import JSONResponse
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from mbti_engine import infer_mbti
 from uuid import uuid4
 from threading import Lock
-from typing import Optional
-from bs4 import BeautifulSoup
 
 import os
 import requests
 import lyricsgenius
 import httpx
+
+# NEW: MongoDB
+from pymongo import MongoClient
 
 load_dotenv()
 app = FastAPI()
@@ -23,6 +24,11 @@ app = FastAPI()
 # Tokens
 GENIUS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# MongoDB setup
+MONGO_URI = os.getenv("MONGODB_URI")
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client["typetune"]
 
 # CORS
 app.add_middleware(
@@ -116,7 +122,7 @@ genius.timeout = 10
 genius.retries = 3
 genius.response_format = 'plain'
 
-# DeepSeek summary generator
+# DeepSeek summary generator (unchanged)
 async def generate_summary_with_deepseek(artist: str, title: str):
     prompt = (
         f"Summarize the meaning and emotion behind the song '{title}' by {artist}' in a single, friendly, ~100‑word paragraph. "
@@ -150,42 +156,19 @@ async def generate_summary_with_deepseek(artist: str, title: str):
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
-# Genius lyrics fetcher
 def get_lyrics_from_genius(artist: str, title: str):
     try:
-        # Build the search URL
-        search_query = f"{title} {artist}".replace(" ", "%20")
-        search_url = f"https://genius.com/api/search/multi?per_page=5&q={search_query}"
+        song = genius.search_song(title=title.strip(), artist=artist.strip())
+        if song and song.lyrics:
+            return song.lyrics.strip()
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/115.0.0.0 Safari/537.36"
-        }
-
-        response = requests.get(search_url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-
-        # Try to get the first song hit
-        hits = data["response"]["sections"][0]["hits"]
-        if not hits:
-            return None
-        song_url = hits[0]["result"]["url"]
-
-        # Now scrape the lyrics page
-        song_page = requests.get(song_url, headers=headers)
-        soup = BeautifulSoup(song_page.text, "html.parser")
-        lyrics_div = soup.find("div", class_="lyrics")  # Legacy
-        if lyrics_div:
-            return lyrics_div.get_text(strip=True)
-
-        # Newer Genius pages use this class
-        lyrics_containers = soup.select("div[data-lyrics-container=true]")
-        if lyrics_containers:
-            return "\n".join([div.get_text(strip=True) for div in lyrics_containers])
+        fallback_query = f"{title} {artist}"
+        song = genius.search_song(fallback_query)
+        if song and song.lyrics:
+            return song.lyrics.strip()
 
         return None
-    except Exception as e:
-        print(f"❌ Genius scraping failed: {e}")
+    except Exception:
         return None
 
 @app.get("/lyrics/{track_id}")
@@ -343,9 +326,7 @@ async def get_artist_insight(track_id: str, request: Request):
         print(f"💥 Artist insight error: {e}")
         return JSONResponse(status_code=500, content={"message": f"Artist insight error: {str(e)}"})
 
-# --- In-memory storage for shareable results ---
-shared_results = {}
-shared_results_lock = Lock()
+# ======== PERSISTENT RESULT STORAGE W/ MONGODB ========
 
 class SharedResult(BaseModel):
     mbti: str
@@ -353,18 +334,21 @@ class SharedResult(BaseModel):
     breakdown: Dict
     tracks_used: List[Dict]
     user: Optional[str] = None
+    spotify_id: Optional[str] = None
 
 @app.post("/save-result")
 def save_result(result: SharedResult):
     result_id = str(uuid4())
-    with shared_results_lock:
-        shared_results[result_id] = result.dict()
+    record = result.dict()
+    record["result_id"] = result_id
+    db.results.insert_one(record)
     return {"result_id": result_id}
 
 @app.get("/result/{result_id}")
 def get_result(result_id: str):
-    with shared_results_lock:
-        result = shared_results.get(result_id)
+    result = db.results.find_one({"result_id": result_id})
     if not result:
         raise HTTPException(status_code=404, detail="Result not found")
+    # MongoDB adds an "_id" field, which can't be serialized to JSON; remove it
+    result.pop("_id", None)
     return result
