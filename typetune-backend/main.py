@@ -173,29 +173,40 @@ async def summarize_artist_info(artist_name: str, input_text: str) -> str:
 async def get_artist_insight(track_id: str, request: Request):
     token = request.headers.get("Authorization")
     if not token:
+        print("[ERROR] Missing token")
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
 
     try:
-        # --- 1. Fetch Spotify track and artist info
+        print(f"[DEBUG] Fetching track: {track_id}")
         track_resp = requests.get(
             f"https://api.spotify.com/v1/tracks/{track_id}",
             headers={"Authorization": f"Bearer {token}"}
         )
+        print(f"[DEBUG] Track response status: {track_resp.status_code}")
         if track_resp.status_code != 200:
+            print("[ERROR] Spotify track fetch failed", track_resp.text)
             raise HTTPException(status_code=track_resp.status_code, detail="Spotify track fetch failed")
         track = track_resp.json()
+        print("[DEBUG] Track JSON:", track)
+        if not track.get("artists") or not track["artists"]:
+            print("[ERROR] Track has no artists")
+            raise HTTPException(status_code=400, detail="Track has no artist data")
         artist_id = track["artists"][0]["id"]
         artist_name = track["artists"][0]["name"]
+        print(f"[DEBUG] Artist: {artist_name}, ID: {artist_id}")
 
-        # --- 2. Get Spotify artist info
         sp = Spotify(auth=token)
         artist_data = sp.artist(artist_id)
+        print(f"[DEBUG] Artist data: {artist_data}")
+        image_url = None
+        if artist_data.get("images"):
+            image_url = artist_data["images"][0].get("url")
         spotify_info = {
             "name": artist_data.get("name"),
             "genres": artist_data.get("genres", []),
             "popularity": artist_data.get("popularity"),
-            "image": artist_data.get("images", [{}])[0].get("url"),
+            "image": image_url,
             "spotify_url": artist_data.get("external_urls", {}).get("spotify")
         }
         sources_used = []
@@ -203,14 +214,13 @@ async def get_artist_insight(track_id: str, request: Request):
         if spotify_info["genres"]:
             sources_used.append("spotify")
             combined_info += f"Genres: {', '.join(spotify_info['genres'])}.\n"
-
-        # --- 3. Fallback: Use what we have
         if not combined_info.strip():
             combined_info = f"Write a 100-word bio for {artist_name}, a musical artist."
 
-        # --- 4. DeepSeek/Horizon summary generation
+        print("[DEBUG] Calling DeepSeek/OpenRouter with info:", combined_info)
         summary = await summarize_artist_info(artist_name, combined_info)
         sources_used.append("deepseek")
+        print("[DEBUG] DeepSeek summary:", summary[:100])
 
         return {
             "artist_name": spotify_info["name"],
@@ -222,6 +232,7 @@ async def get_artist_insight(track_id: str, request: Request):
             "sources_used": sources_used
         }
     except Exception as e:
+        print(f"[EXCEPTION] {e}")
         return JSONResponse(status_code=500, content={"message": f"Artist insight error: {str(e)}"})
 
 # --- RESULT SHARING AND PING ---
