@@ -154,6 +154,13 @@ async def get_lyrics(track_id: str, request: Request):
         lyrics_available = False
         lyrics_message = "Lyrics are unavailable for this song. Please try another track or check back later."
 
+    # --- Bonus fix for empty string/blank lyrics ---
+    if not lyrics or (isinstance(lyrics, str) and not lyrics.strip()):
+        lyrics_available = False
+        if not lyrics_message:
+            lyrics_message = "Lyrics are unavailable for this song. Please try another track or check back later."
+    # -----------------------------------------------
+
     # Generate summary using OpenRouter
     try:
         summary = await summarize_song_lyrics(title, artist, lyrics, genres)
@@ -162,11 +169,12 @@ async def get_lyrics(track_id: str, request: Request):
 
     return {
         "lyrics": lyrics,
-        "lyrics_available": lyrics_available,  # Add this boolean
-        "lyrics_message": lyrics_message,      # Add this message
+        "lyrics_available": lyrics_available,
+        "lyrics_message": lyrics_message,
         "summary": summary,
         "track": {"title": title, "artist": artist, "genres": genres}
     }
+
 
 
 # --- ARTIST INSIGHT ENDPOINT WITH OPENROUTER ---
