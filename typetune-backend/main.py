@@ -249,6 +249,6 @@ def get_result(result_id: str):
     result.pop("_id", None)
     return result
 
-@app.get("/ping")
+@app.api_route("/ping", methods=["GET", "HEAD"])
 async def ping():
     return {"status": "ok"}
