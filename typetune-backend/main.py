@@ -116,6 +116,7 @@ async def get_lyrics(track_id: str, request: Request):
     if not token:
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
+    # Get track info (and genres) from Spotify
     res = requests.get(
         f"https://api.spotify.com/v1/tracks/{track_id}",
         headers={"Authorization": f"Bearer {token}"}
@@ -125,18 +126,39 @@ async def get_lyrics(track_id: str, request: Request):
     track = res.json()
     artist = track["artists"][0]["name"]
     title = track["name"]
+
+    # Try to get genres from artist info
+    sp = Spotify(auth=token)
+    try:
+        artist_data = sp.artist(track["artists"][0]["id"])
+        genres = artist_data.get("genres", [])
+    except Exception:
+        genres = []
+
+    # Try to fetch lyrics
     api_url = f"https://some-random-api.com/lyrics?title={title}&artist={artist}"
-    headers = {"Authorization": SOMERANDOMAPI_KEY}
-    lyrics_res = requests.get(api_url, headers=headers)
+    headers_lyrics = {"Authorization": SOMERANDOMAPI_KEY}
+    lyrics_res = requests.get(api_url, headers=headers_lyrics)
+    lyrics = None
     try:
         lyrics_json = lyrics_res.json()
+        if lyrics_res.status_code == 200 and lyrics_json.get("lyrics"):
+            lyrics = lyrics_json.get("lyrics", "")
+    except Exception:
+        lyrics = None
+
+    # Generate summary using OpenRouter
+    try:
+        summary = await summarize_song_lyrics(title, artist, lyrics, genres)
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": "Invalid lyrics API response"})
-    if lyrics_res.status_code == 404 or not lyrics_json.get("lyrics"):
-        return JSONResponse(status_code=404, content={"message": "Lyrics not found"})
-    lyrics = lyrics_json.get("lyrics", "")
-    summary = f"Lyrics fetched for '{title}' by {artist}."
-    return {"lyrics": lyrics, "summary": summary, "track": {"title": title, "artist": artist}}
+        summary = "Sorry, the AI could not generate a summary at this time."
+
+    return {
+        "lyrics": lyrics,
+        "summary": summary,
+        "track": {"title": title, "artist": artist, "genres": genres}
+    }
+
 
 # --- ARTIST INSIGHT ENDPOINT WITH OPENROUTER ---
 async def summarize_artist_info(artist_name: str, input_text: str) -> str:
@@ -277,6 +299,52 @@ async def get_artist_insight(track_id: str, request: Request):
     except Exception as e:
         print(f"[EXCEPTION] [artist-insight] {e}", file=sys.stderr)
         return JSONResponse(status_code=500, content={"message": f"Artist insight error: {str(e)}"})
+
+async def summarize_song_lyrics(title: str, artist: str, lyrics: Optional[str], genres: Optional[list]) -> str:
+    prompt = (
+        f"Song Title: {title}\n"
+        f"Artist: {artist}\n"
+    )
+    if genres:
+        prompt += f"Genres: {', '.join(genres)}\n"
+    if lyrics:
+        prompt += (
+            f"Lyrics:\n{lyrics}\n\n"
+            f"Based on the lyrics above, give a ~100 word summary of the song's main theme, mood, and possible message or story. "
+            f"If the lyrics are in a foreign language, infer the meaning if possible. "
+            f"Mention any connection to the artist's known style or background if relevant. "
+            f"Write like a music journalist, with clarity and insight, for a general audience."
+        )
+    else:
+        prompt += (
+            "No lyrics were found for this song. Based on the title, artist, and genre(s), "
+            "write a ~100 word summary of what the song could be about or the kind of mood and themes it might have. "
+            "If the artist is known for particular styles or stories, include that context."
+        )
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://typetune.vercel.app",
+        "X-Title": "TypeTune"
+    }
+    payload = {
+        "model": "openrouter/horizon-beta",
+        "messages": [
+            {"role": "system", "content": "You are a helpful and insightful music journalist."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 300
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
 # --- RESULT SHARING AND PING ---
 class SharedResult(BaseModel):
