@@ -20,7 +20,6 @@ app = FastAPI()
 
 SOMERANDOMAPI_KEY = os.getenv("SOMERANDOMAPI_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-GENIUS_ACCESS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
 
 # MongoDB setup
 MONGO_URI = os.getenv("MONGODB_URI")
@@ -138,7 +137,7 @@ async def get_lyrics(track_id: str, request: Request):
     summary = f"Lyrics fetched for '{title}' by {artist}."
     return {"lyrics": lyrics, "summary": summary, "track": {"title": title, "artist": artist}}
 
-# --- ARTIST INSIGHT ENDPOINT WITH OPENROUTER/GENIUS ---
+# --- ARTIST INSIGHT ENDPOINT WITH OPENROUTER ---
 async def summarize_artist_info(artist_name: str, input_text: str) -> str:
     prompt = (
         f"Using the following info, write a short ~100-word biography of the musical artist '{artist_name}'. "
@@ -205,30 +204,11 @@ async def get_artist_insight(track_id: str, request: Request):
             sources_used.append("spotify")
             combined_info += f"Genres: {', '.join(spotify_info['genres'])}.\n"
 
-        # --- 3. (Optional) Try Genius bio using API (if you want; otherwise skip this block)
-        genius_bio = None
-        if GENIUS_ACCESS_TOKEN:
-            genius_api_url = f"https://api.genius.com/search?q={artist_name}"
-            genius_headers = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
-            genius_resp = requests.get(genius_api_url, headers=genius_headers)
-            if genius_resp.status_code == 200:
-                hits = genius_resp.json().get("response", {}).get("hits", [])
-                if hits:
-                    # If Genius has artist description, add it to the context for the LLM
-                    artist_api_path = hits[0]["result"]["primary_artist"]["api_path"]
-                    artist_details_url = f"https://api.genius.com{artist_api_path}"
-                    details_resp = requests.get(artist_details_url, headers=genius_headers)
-                    if details_resp.status_code == 200:
-                        genius_bio = details_resp.json()["response"]["artist"].get("description", {}).get("plain")
-                        if genius_bio:
-                            sources_used.append("genius")
-                            combined_info += f"Genius Bio: {genius_bio}\n"
-
-        # --- 4. Fallback
+        # --- 3. Fallback: Use what we have
         if not combined_info.strip():
             combined_info = f"Write a 100-word bio for {artist_name}, a musical artist."
 
-        # --- 5. DeepSeek/Horizon summary generation
+        # --- 4. DeepSeek/Horizon summary generation
         summary = await summarize_artist_info(artist_name, combined_info)
         sources_used.append("deepseek")
 
