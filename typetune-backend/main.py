@@ -155,19 +155,24 @@ async def get_lyrics(track_id: str, request: Request):
     title = track["name"]
     print("📄 Artist:", artist, "| Title:", title)
 
-    # Step 2: Fetch lyrics from SomeRandomAPI **with key**
+    # Step 2: Fetch lyrics from SomeRandomAPI **with Authorization: Bearer <token>**
     api_url = f"https://some-random-api.com/lyrics?title={title}&artist={artist}"
-    headers = {"X-API-KEY": SOMERANDOMAPI_KEY}
+    headers = {"Authorization": f"Bearer {SOMERANDOMAPI_KEY}"}
     print("📄 Fetching lyrics from SomeRandomAPI:", api_url)
-    print("📄 Using SomeRandomAPI key:", SOMERANDOMAPI_KEY[:6] if SOMERANDOMAPI_KEY else "None")
+    print("📄 Using SomeRandomAPI key (first 8 chars):", SOMERANDOMAPI_KEY[:8] if SOMERANDOMAPI_KEY else "None")
     lyrics_res = requests.get(api_url, headers=headers)
     print("📄 SomeRandomAPI response code:", lyrics_res.status_code)
     print("📄 SomeRandomAPI response body:", lyrics_res.text)
-    if lyrics_res.status_code == 404 or not lyrics_res.json().get("lyrics"):
+    try:
+        lyrics_json = lyrics_res.json()
+    except Exception as e:
+        print("❌ Error parsing SomeRandomAPI JSON:", e)
+        return JSONResponse(status_code=500, content={"message": "Invalid lyrics API response"})
+
+    if lyrics_res.status_code == 404 or not lyrics_json.get("lyrics"):
         print("❌ Lyrics not found in SomeRandomAPI")
         return JSONResponse(status_code=404, content={"message": "Lyrics not found"})
-    lyrics_data = lyrics_res.json()
-    lyrics = lyrics_data.get("lyrics", "")
+    lyrics = lyrics_json.get("lyrics", "")
     print("📄 Lyrics (first 100 chars):", lyrics[:100])
 
     # Step 3: Generate summary (optional)
