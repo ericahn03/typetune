@@ -1,9 +1,4 @@
-import requests
-
-from bs4 import BeautifulSoup
 from collections import Counter
-
-import os
 
 def infer_mbti(features):
     def avg(key):
@@ -18,21 +13,18 @@ def infer_mbti(features):
         return genre_counts.most_common(3)
 
     # --- Compute Averages ---
-    track_popularity = avg("popularity")            # 0–100
-    duration_ms = avg("duration_ms")                # 180,000 ~ 240,000 typical
-    artist_popularity = avg("artist_popularity")    # 0–100
+    track_popularity = avg("popularity")
+    duration_ms = avg("duration_ms")
+    artist_popularity = avg("artist_popularity")
     common_genres = top_genres()
     genre_tags = [g[0] for g in common_genres]
 
     # --- Scoring & Logic ---
-
-    # E vs I
     ei_score = track_popularity / 100
     if any(g in genre_tags for g in ['dance pop', 'pop rap', 'edm']):
         ei_score += 0.03
     ei_score = min(max(ei_score, 0), 1)
 
-    # S vs N
     expected_average = 215000
     sn_score = (expected_average - duration_ms) / 120000 + 0.5
     if 'acoustic' in genre_tags:
@@ -40,7 +32,6 @@ def infer_mbti(features):
     sn_score = min(max(sn_score, 0), 1)
     sn = 'S' if sn_score >= 0.5 else 'N'
 
-    # T vs F
     tf_score = artist_popularity / 100
     if any(g in genre_tags for g in ['rap', 'trap', 'metal']):
         tf_score += 0.04
@@ -48,11 +39,10 @@ def infer_mbti(features):
         tf_score -= 0.04
     tf_score = min(max(tf_score, 0), 1)
 
-    # J vs P
     j_genres = {'classical', 'k-pop', 'j-pop', 'indie pop', 'broadway', 'neo mellow', 'dance pop', 'pop'}
     p_genres = {'lo-fi', 'alt z', 'trap', 'vaporwave', 'indie rock', 'psychedelic rock'}
 
-    jp_score = 0.5  # neutral baseline
+    jp_score = 0.5
     for g in genre_tags:
         if g in j_genres:
             jp_score += 0.05
@@ -60,7 +50,6 @@ def infer_mbti(features):
             jp_score -= 0.05
     jp_score = min(max(jp_score, 0), 1)
 
-    # --- Final MBTI ---
     ei = 'E' if ei_score >= 0.5 else 'I'
     sn = 'S' if sn_score >= 0.5 else 'N'
     tf = 'T' if tf_score >= 0.5 else 'F'
@@ -100,7 +89,6 @@ def infer_mbti(features):
         "summary": f"Based on your music metadata, you're {mbti} — {explain_mbti(mbti)}"
     }
 
-
 def explain_mbti(mbti):
     explanations = {
         "INFP": "a soulful daydreamer drawn to heartfelt lyrics and mellow vibes",
@@ -120,56 +108,4 @@ def explain_mbti(mbti):
         "ESTP": "an energy junkie spinning bold, high-tempo bangers",
         "ESTJ": "a playlist planner with a love for structure and classics"
     }
-
     return explanations.get(mbti, "a unique vibe all your own")
-
-def search_genius(artist: str, title: str):
-    headers = {"Authorization": f"Bearer {os.getenv('GENIUS_ACCESS_TOKEN')}"}
-    query = f"{artist} {title}"
-    search_url = "https://api.genius.com/search"
-    response = requests.get(search_url, params={"q": query}, headers=headers)
-
-    if response.status_code != 200:
-        return None
-
-    hits = response.json()["response"]["hits"]
-    if not hits:
-        return None
-
-    # Use the first match
-    song_path = hits[0]["result"]["path"]
-    return f"https://genius.com{song_path}"
-
-def scrape_lyrics(genius_url: str):
-    page = requests.get(genius_url)
-    soup = BeautifulSoup(page.text, "html.parser")
-    
-    # This selector may change — test it carefully
-    lyrics_div = soup.select_one("div[class^='Lyrics__Container']")
-    
-    if not lyrics_div:
-        return None
-
-    lyrics = lyrics_div.get_text(separator="\n").strip()
-    return lyrics
-
-def get_lyrics_summary(artist: str, title: str):
-    try:
-        genius_url = search_genius(artist, title)
-        if not genius_url:
-            return None, "Lyrics not found on Genius."
-
-        raw_lyrics = scrape_lyrics(genius_url)
-        if not raw_lyrics:
-            return None, "Couldn’t extract lyrics from Genius."
-
-        # Example emotion highlights (simplified)
-        highlighted = raw_lyrics.replace("love", "<span class='text-pink-400 font-bold'>love</span>")
-        highlighted = highlighted.replace("hate", "<span class='text-red-400 font-bold'>hate</span>")
-
-        summary = f"This song by {artist} explores themes of love, emotion, and introspection."
-        return highlighted, summary
-
-    except Exception as e:
-        print("Lyrics error:", e)
-        return None, "An error occurred while fetching lyrics."
