@@ -162,7 +162,7 @@ async def summarize_artist_info(artist_name: str, input_text: str) -> str:
     }
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://openrouter.ai/v1/chat/completions",
             headers=headers,
             json=payload
         )
