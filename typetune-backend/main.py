@@ -13,6 +13,7 @@ import os
 import requests
 import httpx
 import certifi
+import sys
 from pymongo import MongoClient
 
 load_dotenv()
