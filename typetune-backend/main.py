@@ -153,7 +153,7 @@ async def summarize_artist_info(artist_name: str, input_text: str) -> str:
         "X-Title": "TypeTune"
     }
     payload = {
-        "model": "openrouter/horizon-alpha",
+        "model": "openrouter/horizon-beta",
         "messages": [
             {"role": "system", "content": "You are a helpful music expert."},
             {"role": "user", "content": prompt}
@@ -185,7 +185,7 @@ async def summarize_artist_info(artist_name: str, input_text: str) -> str:
         "X-Title": "TypeTune"
     }
     payload = {
-        "model": "openrouter/horizon-alpha",
+        "model": "openrouter/horizon-beta",
         "messages": [
             {"role": "system", "content": "You are a helpful music expert."},
             {"role": "user", "content": prompt}
