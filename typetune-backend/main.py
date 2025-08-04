@@ -162,43 +162,85 @@ async def summarize_artist_info(artist_name: str, input_text: str) -> str:
     }
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            "https://openrouter.ai/v1/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=payload
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
+# --- ARTIST INSIGHT ENDPOINT WITH OPENROUTER ---
+async def summarize_artist_info(artist_name: str, input_text: str) -> str:
+    prompt = (
+        f"Using the following info, write a short ~100-word biography of the musical artist '{artist_name}'. "
+        f"Focus on genre, background, notable achievements, and overall style. Make it sound casual, music-savvy, "
+        f"and human — like something from a fan blog or artist spotlight.\n\n"
+        f"INFO:\n{input_text}"
+    )
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://typetune.vercel.app",
+        "X-Title": "TypeTune"
+    }
+    payload = {
+        "model": "openrouter/horizon-alpha",
+        "messages": [
+            {"role": "system", "content": "You are a helpful music expert."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 300
+    }
+    print("[DEBUG] [summarize_artist_info] Sending request to OpenRouter...", file=sys.stderr)
+    print("[DEBUG] [summarize_artist_info] Prompt:", prompt[:200], file=sys.stderr)
+    print("[DEBUG] [summarize_artist_info] Headers:", headers, file=sys.stderr)
+    print("[DEBUG] [summarize_artist_info] Payload:", payload, file=sys.stderr)
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload
+        )
+        print("[DEBUG] [summarize_artist_info] Response status:", resp.status_code, file=sys.stderr)
+        print("[DEBUG] [summarize_artist_info] Response text:", await resp.aread(), file=sys.stderr)
+        resp.raise_for_status()
+        data = resp.json()
+        print("[DEBUG] [summarize_artist_info] Response JSON:", data, file=sys.stderr)
+        return data["choices"][0]["message"]["content"]
+
 @app.get("/artist-insight/{track_id}")
 async def get_artist_insight(track_id: str, request: Request):
+    print(f"[DEBUG] [artist-insight] Track ID received: {track_id}", file=sys.stderr)
     token = request.headers.get("Authorization")
     if not token:
-        print("[ERROR] Missing token")
+        print("[ERROR] [artist-insight] Missing token", file=sys.stderr)
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
+    print(f"[DEBUG] [artist-insight] Token after stripping Bearer: {token[:10]}...", file=sys.stderr)
 
     try:
-        print(f"[DEBUG] Fetching track: {track_id}")
+        print(f"[DEBUG] [artist-insight] Fetching track from Spotify...", file=sys.stderr)
         track_resp = requests.get(
             f"https://api.spotify.com/v1/tracks/{track_id}",
             headers={"Authorization": f"Bearer {token}"}
         )
-        print(f"[DEBUG] Track response status: {track_resp.status_code}")
+        print(f"[DEBUG] [artist-insight] Spotify track response status: {track_resp.status_code}", file=sys.stderr)
         if track_resp.status_code != 200:
-            print("[ERROR] Spotify track fetch failed", track_resp.text)
+            print(f"[ERROR] [artist-insight] Spotify track fetch failed: {track_resp.text}", file=sys.stderr)
             raise HTTPException(status_code=track_resp.status_code, detail="Spotify track fetch failed")
         track = track_resp.json()
-        print("[DEBUG] Track JSON:", track)
+        print("[DEBUG] [artist-insight] Track JSON:", track, file=sys.stderr)
         if not track.get("artists") or not track["artists"]:
-            print("[ERROR] Track has no artists")
+            print("[ERROR] [artist-insight] Track has no artists", file=sys.stderr)
             raise HTTPException(status_code=400, detail="Track has no artist data")
         artist_id = track["artists"][0]["id"]
         artist_name = track["artists"][0]["name"]
-        print(f"[DEBUG] Artist: {artist_name}, ID: {artist_id}")
+        print(f"[DEBUG] [artist-insight] Artist: {artist_name}, ID: {artist_id}", file=sys.stderr)
 
         sp = Spotify(auth=token)
         artist_data = sp.artist(artist_id)
-        print(f"[DEBUG] Artist data: {artist_data}")
+        print(f"[DEBUG] [artist-insight] Spotify artist data: {artist_data}", file=sys.stderr)
         image_url = None
         if artist_data.get("images"):
             image_url = artist_data["images"][0].get("url")
@@ -209,6 +251,7 @@ async def get_artist_insight(track_id: str, request: Request):
             "image": image_url,
             "spotify_url": artist_data.get("external_urls", {}).get("spotify")
         }
+        print(f"[DEBUG] [artist-insight] spotify_info: {spotify_info}", file=sys.stderr)
         sources_used = []
         combined_info = ""
         if spotify_info["genres"]:
@@ -216,11 +259,10 @@ async def get_artist_insight(track_id: str, request: Request):
             combined_info += f"Genres: {', '.join(spotify_info['genres'])}.\n"
         if not combined_info.strip():
             combined_info = f"Write a 100-word bio for {artist_name}, a musical artist."
-
-        print("[DEBUG] Calling DeepSeek/OpenRouter with info:", combined_info)
+        print(f"[DEBUG] [artist-insight] Calling DeepSeek/OpenRouter with info: {combined_info}", file=sys.stderr)
         summary = await summarize_artist_info(artist_name, combined_info)
         sources_used.append("deepseek")
-        print("[DEBUG] DeepSeek summary:", summary[:100])
+        print(f"[DEBUG] [artist-insight] DeepSeek summary: {summary[:100]}", file=sys.stderr)
 
         return {
             "artist_name": spotify_info["name"],
@@ -232,7 +274,7 @@ async def get_artist_insight(track_id: str, request: Request):
             "sources_used": sources_used
         }
     except Exception as e:
-        print(f"[EXCEPTION] {e}")
+        print(f"[EXCEPTION] [artist-insight] {e}", file=sys.stderr)
         return JSONResponse(status_code=500, content={"message": f"Artist insight error: {str(e)}"})
 
 # --- RESULT SHARING AND PING ---
