@@ -19,6 +19,8 @@ from pymongo import MongoClient
 load_dotenv()
 app = FastAPI()
 
+SOMERANDOMAPI_KEY = os.getenv("SOMERANDOMAPI_KEY")
+
 # MongoDB setup
 MONGO_URI = os.getenv("MONGODB_URI")
 mongo_client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
@@ -137,6 +139,7 @@ async def get_lyrics(track_id: str, request: Request):
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
     print("📄 Fetching track metadata from Spotify with token:", token[:10], "...")
+
     # Step 1: Get track metadata from Spotify
     res = requests.get(
         f"https://api.spotify.com/v1/tracks/{track_id}",
@@ -152,10 +155,12 @@ async def get_lyrics(track_id: str, request: Request):
     title = track["name"]
     print("📄 Artist:", artist, "| Title:", title)
 
-    # Step 2: Fetch lyrics from SomeRandomAPI
+    # Step 2: Fetch lyrics from SomeRandomAPI **with key**
     api_url = f"https://some-random-api.com/lyrics?title={title}&artist={artist}"
+    headers = {"X-API-KEY": SOMERANDOMAPI_KEY}
     print("📄 Fetching lyrics from SomeRandomAPI:", api_url)
-    lyrics_res = requests.get(api_url)
+    print("📄 Using SomeRandomAPI key:", SOMERANDOMAPI_KEY[:6] if SOMERANDOMAPI_KEY else "None")
+    lyrics_res = requests.get(api_url, headers=headers)
     print("📄 SomeRandomAPI response code:", lyrics_res.status_code)
     print("📄 SomeRandomAPI response body:", lyrics_res.text)
     if lyrics_res.status_code == 404 or not lyrics_res.json().get("lyrics"):
@@ -165,11 +170,12 @@ async def get_lyrics(track_id: str, request: Request):
     lyrics = lyrics_data.get("lyrics", "")
     print("📄 Lyrics (first 100 chars):", lyrics[:100])
 
-    # Step 3: Generate summary (optional: use your DeepSeek/OpenRouter logic)
-    summary = f"Lyrics fetched for '{title}' by {artist}."  # Or add summary logic here
+    # Step 3: Generate summary (optional)
+    summary = f"Lyrics fetched for '{title}' by {artist}."
 
     print("📄 Returning lyrics and summary")
     return {"lyrics": lyrics, "summary": summary, "track": {"title": title, "artist": artist}}
+
 
 # ---------- ARTIST INSIGHT ENDPOINT ----------
 @app.get("/artist-insight/{track_id}")
