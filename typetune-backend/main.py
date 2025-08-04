@@ -157,7 +157,7 @@ async def get_lyrics(track_id: str, request: Request):
 
     # Step 2: Fetch lyrics from SomeRandomAPI **with Authorization: Bearer <token>**
     api_url = f"https://some-random-api.com/lyrics?title={title}&artist={artist}"
-    headers = {"Authorization": f"Bearer {SOMERANDOMAPI_KEY}"}
+    headers = {"Authorization": SOMERANDOMAPI_KEY}
     print("📄 Fetching lyrics from SomeRandomAPI:", api_url)
     print("📄 Using SomeRandomAPI key (first 8 chars):", SOMERANDOMAPI_KEY[:8] if SOMERANDOMAPI_KEY else "None")
     lyrics_res = requests.get(api_url, headers=headers)
@@ -183,57 +183,57 @@ async def get_lyrics(track_id: str, request: Request):
 
 
 # ---------- ARTIST INSIGHT ENDPOINT ----------
-@app.get("/artist-insight/{track_id}")
-async def get_artist_insight(track_id: str, request: Request):
-    print("🧑‍🎤 /artist-insight endpoint hit for track ID:", track_id)
+@app.get("/lyrics/{track_id}")
+async def get_lyrics(track_id: str, request: Request):
+    print("📄 /lyrics endpoint hit for track ID:", track_id)
     token = request.headers.get("Authorization")
     if not token:
-        print("❌ No Spotify token header provided")
+        print("❌ Missing Spotify access token header!")
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
+    print("📄 Fetching track metadata from Spotify with token:", token[:10], "...")
+
+    # Step 1: Get track metadata from Spotify
+    res = requests.get(
+        f"https://api.spotify.com/v1/tracks/{track_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    print("📄 Spotify response status:", res.status_code)
+    if res.status_code != 200:
+        print("❌ Spotify track fetch failed:", res.text)
+        raise HTTPException(status_code=res.status_code, detail="Spotify track fetch failed")
+    track = res.json()
+    print("📄 Track JSON:", track)
+    artist = track["artists"][0]["name"]
+    title = track["name"]
+    print("📄 Artist:", artist, "| Title:", title)
+
+    # Step 2: Fetch lyrics from SomeRandomAPI (API key as raw value, no "Bearer")
+    api_url = f"https://some-random-api.com/lyrics?title={title}&artist={artist}"
+    headers = {"Authorization": SOMERANDOMAPI_KEY}
+    print("📄 Fetching lyrics from SomeRandomAPI:", api_url)
+    print("📄 Using SomeRandomAPI key (first 8 chars):", SOMERANDOMAPI_KEY[:8] if SOMERANDOMAPI_KEY else "None")
+    lyrics_res = requests.get(api_url, headers=headers)
+    print("📄 SomeRandomAPI response code:", lyrics_res.status_code)
+    print("📄 SomeRandomAPI response body:", lyrics_res.text)
     try:
-        print("🧑‍🎤 Fetching Spotify track metadata...")
-        track_resp = requests.get(
-            f"https://api.spotify.com/v1/tracks/{track_id}",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        print("🧑‍🎤 Spotify track fetch status:", track_resp.status_code)
-        if track_resp.status_code != 200:
-            print("❌ Spotify track fetch failed:", track_resp.text)
-            raise HTTPException(status_code=track_resp.status_code, detail="Spotify track fetch failed")
-        track = track_resp.json()
-        artist_id = track["artists"][0]["id"]
-        artist_name = track["artists"][0]["name"]
-        print("🧑‍🎤 Artist:", artist_name, "| ID:", artist_id)
-        sp = Spotify(auth=token)
-        artist_data = sp.artist(artist_id)
-        print("🧑‍🎤 Spotify artist data:", artist_data)
-        spotify_info = {
-            "name": artist_data.get("name"),
-            "genres": artist_data.get("genres", []),
-            "popularity": artist_data.get("popularity"),
-            "image": artist_data.get("images", [{}])[0].get("url"),
-            "spotify_url": artist_data.get("external_urls", {}).get("spotify")
-        }
-        sources_used = []
-        combined_info = ""
-        if spotify_info["genres"]:
-            sources_used.append("spotify")
-            combined_info += f"Genres: {', '.join(spotify_info['genres'])}.\n"
-        # Genius/DeepSeek logic as before...
-        print("🧑‍🎤 Returning artist insight")
-        return {
-            "artist_name": spotify_info.get("name", artist_name),
-            "image": spotify_info.get("image"),
-            "genres": spotify_info.get("genres"),
-            "popularity": spotify_info.get("popularity"),
-            "spotify_url": spotify_info.get("spotify_url"),
-            "summary": None,
-            "sources_used": sources_used
-        }
+        lyrics_json = lyrics_res.json()
     except Exception as e:
-        print("❌ Exception in /artist-insight:", e)
-        return JSONResponse(status_code=500, content={"message": f"Artist insight error: {str(e)}"})
+        print("❌ Error parsing SomeRandomAPI JSON:", e)
+        return JSONResponse(status_code=500, content={"message": "Invalid lyrics API response"})
+
+    if lyrics_res.status_code == 404 or not lyrics_json.get("lyrics"):
+        print("❌ Lyrics not found in SomeRandomAPI")
+        return JSONResponse(status_code=404, content={"message": "Lyrics not found"})
+    lyrics = lyrics_json.get("lyrics", "")
+    print("📄 Lyrics (first 100 chars):", lyrics[:100])
+
+    # Step 3: Generate summary (optional)
+    summary = f"Lyrics fetched for '{title}' by {artist}."
+
+    print("📄 Returning lyrics and summary")
+    return {"lyrics": lyrics, "summary": summary, "track": {"title": title, "artist": artist}}
+
 
 # PERSISTENT RESULT STORAGE W/ MONGODB (unchanged)
 class SharedResult(BaseModel):
