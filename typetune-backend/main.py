@@ -116,6 +116,7 @@ async def get_lyrics(track_id: str, request: Request):
     if not token:
         raise HTTPException(status_code=401, detail="Missing Spotify access token")
     token = token.replace("Bearer ", "")
+
     # Get track info (and genres) from Spotify
     res = requests.get(
         f"https://api.spotify.com/v1/tracks/{track_id}",
@@ -140,12 +141,18 @@ async def get_lyrics(track_id: str, request: Request):
     headers_lyrics = {"Authorization": SOMERANDOMAPI_KEY}
     lyrics_res = requests.get(api_url, headers=headers_lyrics)
     lyrics = None
+    lyrics_available = True
+    lyrics_message = ""
     try:
         lyrics_json = lyrics_res.json()
         if lyrics_res.status_code == 200 and lyrics_json.get("lyrics"):
             lyrics = lyrics_json.get("lyrics", "")
+        else:
+            lyrics_available = False
+            lyrics_message = "Lyrics are unavailable for this song. Please try another track or check back later."
     except Exception:
-        lyrics = None
+        lyrics_available = False
+        lyrics_message = "Lyrics are unavailable for this song. Please try another track or check back later."
 
     # Generate summary using OpenRouter
     try:
@@ -155,6 +162,8 @@ async def get_lyrics(track_id: str, request: Request):
 
     return {
         "lyrics": lyrics,
+        "lyrics_available": lyrics_available,  # Add this boolean
+        "lyrics_message": lyrics_message,      # Add this message
         "summary": summary,
         "track": {"title": title, "artist": artist, "genres": genres}
     }
