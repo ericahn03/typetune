@@ -8,9 +8,10 @@ export default function Lyrics() {
   const navigate = useNavigate();
   const token = localStorage.getItem("spotify_access_token");
 
-  console.log("Fetching:", `${import.meta.env.VITE_API_URL}/lyrics/${trackId}`);
-  console.log("Token exists?", Boolean(token));
-  console.log("trackId:", trackId);
+  // --- Debug logs
+  console.log("🟢 Fetching:", `${import.meta.env.VITE_API_URL}/lyrics/${trackId}`);
+  console.log("🟢 Token exists?", Boolean(token), "Value:", token);
+  console.log("🟢 trackId:", trackId);
 
   const [lyricsData, setLyricsData] = useState(null);
   const [artistInsight, setArtistInsight] = useState(null);
@@ -32,13 +33,17 @@ export default function Lyrics() {
         if (cached) {
           setLyricsData(JSON.parse(cached));
           setError(null);
+          console.log("🟢 Loaded lyrics from cache");
           return;
         }
       }
 
+      // Log outgoing request
+      console.log("🟢 Requesting lyrics from backend...");
       const res = await axios.get(`${import.meta.env.VITE_API_URL}/lyrics/${trackId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("🟢 Lyrics fetch response:", res);
 
       const raw = res.data.lyrics || "";
       const lines = raw
@@ -63,13 +68,27 @@ export default function Lyrics() {
         summary: res.data.summary,
         lyrics: formattedLyrics,
         track: res.data.track || {},
+        lyrics_available: res.data.lyrics_available,
+        lyrics_message: res.data.lyrics_message,
       };
 
       setLyricsData(result);
       localStorage.setItem(lyricsCacheKey, JSON.stringify(result));
     } catch (err) {
-      console.error(err);
-      setError("Lyrics could not be loaded for this track.");
+      // Log error detail!
+      if (err.response) {
+        console.error("🟠 Error response:", err.response.status, err.response.data);
+        if (err.response.status === 404) {
+          setError("Lyrics not found for this track.");
+        } else if (err.response.status === 401) {
+          setError("Session expired. Please re-login.");
+        } else {
+          setError("Lyrics could not be loaded for this track.");
+        }
+      } else {
+        console.error("🔴 Unknown error in fetchLyrics:", err);
+        setError("Lyrics could not be loaded for this track.");
+      }
     } finally {
       setRefreshing(false);
     }
@@ -84,24 +103,42 @@ export default function Lyrics() {
         if (cached) {
           setArtistInsight(JSON.parse(cached));
           setArtistLoading(false);
+          console.log("🟢 Loaded artist insight from cache");
           return;
         }
       }
 
+      // Log outgoing request
+      console.log("🟢 Requesting artist-insight from backend...");
       const res = await axios.get(`${import.meta.env.VITE_API_URL}/artist-insight/${trackId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("🟢 Artist-insight response:", res);
 
       setArtistInsight(res.data);
       localStorage.setItem(artistCacheKey, JSON.stringify(res.data));
     } catch (err) {
-      console.error("Error fetching artist insight:", err);
+      if (err.response) {
+        console.error("🟠 Error fetching artist insight:", err.response.status, err.response.data);
+        if (err.response.status === 401) {
+          setError("Session expired. Please re-login.");
+        } else {
+          setError("Artist info could not be loaded.");
+        }
+      } else {
+        console.error("🔴 Unknown error in fetchArtistInsight:", err);
+        setError("Artist info could not be loaded.");
+      }
     } finally {
       setArtistLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!token) {
+      setError("No Spotify access token found. Please log in.");
+      return;
+    }
     fetchLyrics();
     fetchArtistInsight();
   }, [trackId, token]);
@@ -170,11 +207,27 @@ export default function Lyrics() {
             </button>
           </div>
 
-          {!lyricsData?.lyrics && error && (
+          {/* --- Disclaimer here! --- */}
+          <p className="text-xs italic text-gray-400 text-center mb-4">
+            Lyrics are provided for reference only and may be unavailable or inaccurate.
+          </p>
+
+          {/* 1. Lyrics unavailable from backend (red error) */}
+          {lyricsData && (
+            (lyricsData.lyrics_available === false || (!lyricsData.lyrics && !error)) && (
+              <p className="text-red-400 text-center font-medium py-4">
+                {lyricsData.lyrics_message || "Lyrics are unavailable for this song. Please try another track or check back later."}
+              </p>
+            )
+          )}
+
+          {/* 2. Axios/network error (red error) */}
+          {!lyricsData && error && (
             <p className="text-red-400 text-center">{error}</p>
           )}
 
-          {lyricsData?.lyrics ? (
+          {/* 3. Lyrics present and available */}
+          {lyricsData && lyricsData.lyrics_available !== false && lyricsData.lyrics && (
             <>
               <div
                 className={`text-white text-lg leading-relaxed space-y-3 text-center transition-all duration-300 overflow-hidden ${
@@ -194,8 +247,11 @@ export default function Lyrics() {
                 </button>
               </div>
             </>
-          ) : (
-            !error && <p className="text-gray-300 text-center">Loading lyrics...</p>
+          )}
+
+          {/* 4. Default: still loading */}
+          {!lyricsData && !error && (
+            <p className="text-gray-300 text-center">Loading lyrics...</p>
           )}
         </div>
 

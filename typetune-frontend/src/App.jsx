@@ -10,6 +10,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/callback" element={<Callback />} />
+        <Route path="/result/:resultId/shared" element={<Result />} />
         <Route path="/result/:resultId" element={<Result />} />
         <Route path="/result" element={<Result />} />
         <Route path="/lyrics/:trackId" element={<Lyrics />} />

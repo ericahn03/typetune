@@ -20,7 +20,7 @@ function FloatingActionButton({ mbti, isShared }) {
   const handleShare = async () => {
     const resultId = mbti?.result_id;
     const shareUrl = resultId
-      ? `${window.location.origin}/result/${resultId}`
+      ? `${window.location.origin}/result/${resultId}/shared`
       : window.location.origin;
 
     try {
@@ -116,35 +116,42 @@ function FloatingActionButton({ mbti, isShared }) {
 export default function Result() {
   const [mbti, setMbti] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentSpotifyId, setCurrentSpotifyId] = useState(null);
   const [userDisplayName, setUserDisplayName] = useState("");
   const token = localStorage.getItem(SPOTIFY_KEY);
   const navigate = useNavigate();
-  const { resultId } = useParams();
-  const isShared = !!resultId;
+  const { resultId, shared } = useParams();
+  const isShared = window.location.pathname.endsWith("/shared");
+
+  // Helper to clean all local auth data (recommended on logout)
+  const clearAuthCache = () => {
+    localStorage.removeItem(LOCAL_KEY);
+    localStorage.removeItem(SPOTIFY_KEY);
+  };
 
   useEffect(() => {
+    let ignore = false;
     async function loadResult() {
       setLoading(true);
 
-      // Get current Spotify userId (if logged in)
       let fetchedSpotifyId = null;
       let fetchedDisplayName = "";
       if (token) {
         try {
-          const { data: userData } = await axios.get("https://api.spotify.com/v1/me", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const { data: userData } = await axios.get(
+            "https://api.spotify.com/v1/me",
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
           fetchedSpotifyId = userData.id;
           fetchedDisplayName = userData.display_name || "";
-          setCurrentUserId(fetchedSpotifyId);
+          setCurrentSpotifyId(fetchedSpotifyId);
           setUserDisplayName(fetchedDisplayName);
-        } catch (e) {
-          setCurrentUserId(null);
+        } catch {
+          fetchedSpotifyId = null;
         }
       }
 
-      // 1. Shared result view (URL contains resultId)
+      // If shared result (with resultId in URL)
       if (resultId) {
         try {
           const { data: sharedResult } = await axios.get(
@@ -152,16 +159,16 @@ export default function Result() {
           );
           setMbti(sharedResult);
 
-          // If logged in, and this shared result is actually my own result, redirect to /result (personal)
+          // Redirect to personal result if this is actually the current user's result
           if (
             token &&
             sharedResult.spotify_id &&
             sharedResult.spotify_id === fetchedSpotifyId
           ) {
-            navigate("/result", { replace: true });
-            return;
+            // navigate("/result", { replace: true });
+            // return;
           }
-        } catch (err) {
+        } catch {
           setMbti(null);
         } finally {
           setLoading(false);
@@ -169,35 +176,48 @@ export default function Result() {
         return;
       }
 
-      // 2. Personal result (no resultId in URL)
-      // Check local cache
-      const cached = localStorage.getItem(LOCAL_KEY);
-      if (cached) {
-        const cachedMbti = JSON.parse(cached);
-        // Only use cached result if it matches current Spotify user
-        if (
-          fetchedSpotifyId &&
-          cachedMbti.spotify_id &&
-          cachedMbti.spotify_id === fetchedSpotifyId
-        ) {
-          setMbti(cachedMbti);
-          setLoading(false);
-          return;
-        } else {
-          // Remove outdated cache
-          localStorage.removeItem(LOCAL_KEY);
+      // --- PERSONAL RESULT FLOW ---
+      // Step 1: Always check the cache Spotify ID against current user ID
+      let useCache = false;
+      let cachedMbti = null;
+      if (fetchedSpotifyId) {
+        const cacheRaw = localStorage.getItem(LOCAL_KEY);
+        if (cacheRaw) {
+          try {
+            cachedMbti = JSON.parse(cacheRaw);
+            // If cache does NOT match this Spotify user, wipe cache.
+            if (
+              !cachedMbti.spotify_id ||
+              cachedMbti.spotify_id !== fetchedSpotifyId
+            ) {
+              localStorage.removeItem(LOCAL_KEY);
+              cachedMbti = null;
+            } else {
+              useCache = true;
+            }
+          } catch {
+            // Bad cache? Nuke it.
+            localStorage.removeItem(LOCAL_KEY);
+          }
         }
+      } else {
+        localStorage.removeItem(LOCAL_KEY); // Not logged in? Clear cache.
       }
 
-      // Need to recalculate
-      if (token) {
+      // Step 2: If valid cache found, use it
+      if (useCache && cachedMbti) {
+        setMbti(cachedMbti);
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: No cache OR user changed: recalc result
+      if (token && fetchedSpotifyId) {
         try {
-          // Fetch top tracks
           const { data: topData } = await axios.get(
             `${import.meta.env.VITE_API_URL}/top-tracks`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          // Prepare features for backend MBTI
           const features = topData.tracks.map(track => ({
             popularity: track.popularity,
             duration_ms: track.duration_ms,
@@ -205,21 +225,19 @@ export default function Result() {
             artist_genres: track.artist_genres,
           }));
 
-          // MBTI calculation
           const { data: mbtiResult } = await axios.post(
             `${import.meta.env.VITE_API_URL}/mbti`,
             { audio_features: features }
           );
 
-          // Add formatted duration for UI
           const formattedTracks = topData.tracks.map(track => {
             const totalSeconds = Math.floor(track.duration_ms / 1000);
             const minutes = Math.floor(totalSeconds / 60);
-            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            const seconds = String(totalSeconds % 60).padStart(2, "0");
             return { ...track, duration_formatted: `${minutes}:${seconds}` };
           });
 
-          // Save to backend and get resultId
+          // Save to backend, tie to this user
           const { data: saveResp } = await axios.post(
             `${import.meta.env.VITE_API_URL}/save-result`,
             {
@@ -233,7 +251,7 @@ export default function Result() {
           );
 
           // Update URL
-          window.history.replaceState({}, '', `/result/${saveResp.result_id}`);
+          window.history.replaceState({}, "", `/result/${saveResp.result_id}`);
 
           const result = {
             ...mbtiResult,
@@ -244,7 +262,7 @@ export default function Result() {
           };
           localStorage.setItem(LOCAL_KEY, JSON.stringify(result));
           setMbti(result);
-        } catch (err) {
+        } catch {
           setMbti(null);
         } finally {
           setLoading(false);
@@ -256,6 +274,7 @@ export default function Result() {
     }
 
     loadResult();
+    return () => { ignore = true; };
     // eslint-disable-next-line
   }, [token, resultId]);
 
@@ -263,6 +282,7 @@ export default function Result() {
     return <div className="text-center text-white mt-16 text-xl">Analyzing your music...</div>;
   if (!mbti)
     return <div className="text-center text-yellow-400 mt-16 text-lg">This shared result is no longer available or the link is invalid.</div>;
+
 
   return (
     <div className="relative w-full min-h-screen font-sans overflow-x-hidden overflow-y-auto">
@@ -287,22 +307,24 @@ export default function Result() {
       <div className="relative z-20 max-w-6xl mx-auto space-y-12 px-6 py-10">
         {/* MBTI Header */}
         <div className="text-center space-y-2 relative">
-          <h1 className="text-5xl font-extrabold flex justify-center items-center gap-3 text-white">
-            {isShared
-              ? (mbti.user
-                  ? `${mbti.user}'s Audio Type:`
-                  : "Shared Audio Type:")
-              : "Your Audio Type:"}
-            <span
-              className={
-                isShared
-                  ? "bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400 text-transparent bg-clip-text drop-shadow-[0_0_10px_#60a5fa]"
-                  : "text-green-400 drop-shadow-[0_0_10px_#1DB954]"
-              }
-            >
-              {mbti.mbti}
-            </span>
-            {!isShared && (
+        <h1 className="text-5xl font-extrabold flex justify-center items-center gap-3 text-white relative">
+          {isShared
+            ? (mbti.user
+                ? `${mbti.user}'s Audio Type:`
+                : "Shared Audio Type:")
+            : "Your Audio Type:"}
+          <span
+            className={
+              isShared
+                ? "bg-gradient-to-r from-blue-600 via-sky-500 to-blue-400 text-transparent bg-clip-text drop-shadow-[0_0_10px_#60a5fa]"
+                : "text-green-400 drop-shadow-[0_0_10px_#1DB954]"
+            }
+          >
+            {mbti.mbti}
+          </span>
+          {!isShared && (
+            <>
+              {/* Refresh Button */}
               <button
                 onClick={() => {
                   localStorage.removeItem(LOCAL_KEY);
@@ -318,8 +340,29 @@ export default function Result() {
                   Refresh Results
                 </span>
               </button>
-            )}
-          </h1>
+              {/* Home Button */}
+              <button
+                onClick={() => {
+                  localStorage.removeItem(LOCAL_KEY);
+                  localStorage.removeItem(SPOTIFY_KEY);
+                  navigate("/", { replace: true });
+                }}
+                className="group ml-2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+                title="Go Home"
+                aria-label="Go Home"
+                style={{
+                  boxShadow: "0 2px 10px 0 rgba(30,185,84,0.10)",
+                  verticalAlign: "middle",
+                }}
+              >
+                <Home className="w-5 h-5 text-green-300 group-hover:scale-110 group-hover:text-green-400 transition-transform duration-300" />
+                <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-xs text-white px-2 py-1 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  Go Home
+                </span>
+              </button>
+            </>
+          )}
+        </h1>
           <p className={isShared ? "text-sky-300" : "text-gray-300"}>
             {isShared
               ? mbti.summary
